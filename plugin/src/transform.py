@@ -96,8 +96,8 @@ def run(input):
     # TEMP DEBUG — forcing weather flags to verify the hatch overlay actually renders on the
     # real device (current forecast is clear, so nothing would show otherwise). Remove after
     # confirming on-device.
-    for h in range(int(start_h), int(end_h)):
-        hourly_weather.setdefault(0, {})[h] = "rain" if h % 2 == 0 else "snow"
+    # for h in range(int(start_h), int(end_h)):
+    #    hourly_weather.setdefault(0, {})[h] = "rain" if h % 2 == 0 else "snow"
 
     grid = _layout_native(raw_days, start_h, end_h, now_h, sun, hourly_weather)
 
