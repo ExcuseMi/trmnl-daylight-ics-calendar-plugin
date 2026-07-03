@@ -1,0 +1,63 @@
+---
+strategy: polling
+no_screen_padding: 'yes'
+dark_mode: 'no'
+static_data: ''
+polling_verb: get
+framework_version: 3.1.1
+serverless_language: python
+polling_url: ''
+polling_headers: ''
+polling_body: ''
+id: 365548
+custom_fields:
+- keyname: author_info
+  name: About This Plugin
+  field_type: author_bio
+  description: 3-day agenda from any ICS calendar feed (Nextcloud or otherwise), with sunrise/sunset lines on the timeline. Auto-detects your language and time format from your TRMNL account.<br /><br />Runs on TRMNL <strong>Serverless</strong> — no server to host.
+  github_url: https://github.com/ExcuseMi/trmnl-daylight-ics-calendar-plugin
+  category: calendar
+  help_text: TRMNL X Ready
+- keyname: ics_url
+  field_type: text
+  name: Calendar ICS URLs
+  description: One ICS link per line to combine several calendars. Nextcloud → Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong> (ends in <code>?export</code> or <code>.ics</code>). <code>webcal://</code> links work too.
+  placeholder: |-
+    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN1/?export
+    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export
+- keyname: time_zone
+  field_type: time_zone
+  name: Time Zone
+  description: Days and event times are computed in this zone. Leave blank to use your TRMNL account's own time zone.
+  optional: true
+- keyname: time_format
+  field_type: select
+  name: Time Format
+  description: How event and sun times are displayed.
+  options:
+  - 24-hour (14:30): 24h
+  - 12-hour (2:30 PM): 12h
+  default: 24h
+- keyname: location
+  field_type: string
+  name: Location (for sunrise/sunset)
+  description: City name (e.g. <code>Brussels</code>) or coordinates as <code>lat,lon</code>. Leave blank to hide sun times.
+  optional: true
+- keyname: day_start
+  field_type: number
+  name: Grid starts at (hour)
+  description: First hour shown on the calendar grid (0–23).
+  default: 8
+  min: 0
+  max: 23
+  step: 1
+- keyname: day_end
+  field_type: number
+  name: Grid ends at (hour)
+  description: Last hour shown on the calendar grid (1–24). Must be after the start hour.
+  default: 22
+  min: 1
+  max: 24
+  step: 1
+name: Daylight ICS Calendar (3-day)
+refresh_interval: 15

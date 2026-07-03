@@ -1,0 +1,259 @@
+{% template main %}
+{%- if view == 4 -%}
+  {%- comment -%} quadrant: a quarter of the full-view screen area — needs its own,
+  smaller floor rather than sharing full's or even the half-views' sizes. {%- endcomment -%}
+  {%- assign head_title_cls = "title--small" -%}
+  {%- assign chip_title_cls = "title--small" -%}
+  {%- assign axis_cls = "label--small" -%}
+{%- elsif view == 3 -%}
+  {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
+  width-constrained rather than area-constrained, so it needs a smaller tier than
+  half_horizontal even though both are nominally "half" the full-view area. {%- endcomment -%}
+  {%- assign head_title_cls = "title--base lg:title--large" -%}
+  {%- assign chip_title_cls = "title--small" -%}
+  {%- assign axis_cls = "label--base lg:label--large" -%}
+{%- elsif view == 2 -%}
+  {%- comment -%} half_horizontal: full 800px width but half height — width is ample,
+  so it can keep a larger tier than half_vertical. {%- endcomment -%}
+  {%- assign head_title_cls = "title--large lg:title--xlarge" -%}
+  {%- assign chip_title_cls = "title--small lg:title--base" -%}
+  {%- assign axis_cls = "label--base lg:label--large" -%}
+{%- else -%}
+  {%- assign head_title_cls = "title--xlarge lg:title--xxlarge" -%}
+  {%- assign chip_title_cls = "title--base lg:title--large" -%}
+  {%- assign axis_cls = "label--xlarge lg:label--xxlarge" -%}
+{%- endif -%}
+
+<div class="layout layout--col gap--none" id="cal-root">
+  {% if error and has_events == false %}
+    <div class="item">
+      <div class="content">
+        <span class="title title--small">{{ unavailable_label }}</span>
+        <span class="description" data-clamp="2">{{ error }}</span>
+      </div>
+    </div>
+  {% else %}
+    <!-- Native framework grid, not an image: percentages (h--[Ncqh]) are computed
+         server-side in transform.py as a share of the whole screen, so this fills any
+         device — including the larger, portrait, 4-bit TRMNL X — via the framework's
+         own container-query system instead of a fixed-aspect picture. -->
+
+    <div class="grid grid--cols-13 gap--none h--[{{ header_pct }}cqh]">
+      <div class="col--span-1"></div>
+      {% for day in days %}
+        <div class="col--span-4 flex flex--col flex--center-x flex--center-y border--v-1">
+          {% if day.is_today %}
+            <div class="bg--black rounded--small px--[10px] py--[2px]">
+              <span class="title {{ head_title_cls }} p--2 text--white">{{ day.label }}</span>
+            </div>
+          {% else %}
+            <span class="title {{ head_title_cls }} p--2">{{ day.label }}</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if allday_pct > 0 %}
+      <div class="grid grid--cols-13 gap--none h--[{{ allday_pct }}cqh]">
+        <div class="col--span-1"></div>
+        {% for day in days %}
+          <div class="col--span-4 flex flex--col gap--xsmall px--[4px] border--v-1">
+            {% for a in day.allday %}
+              <div class="bg--{{ a.hue }}-30 rounded--small px--[8px] py--[2px]">
+                <span class="title {{ chip_title_cls }} text--white" data-clamp="1">{{ a.title }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="grid grid--cols-13 gap--none h--[{{ grid_pct }}cqh]">
+      <div class="col--span-1 flex flex--col gap--none">
+        {% for row in hour_rows %}
+          <!-- Zebra-stripe by hour instead of drawing boundary lines: five different
+               thin-line techniques all verified correct server-side and rendered fine
+               locally, but never once showed up on the actual device. A per-hour
+               background shade is a large-area fill instead of a 1-2px sliver, so it
+               can't fail the same way. -->
+          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--center-x cal-row {% if row.shade == 1 %}bg--gray-60{% endif %}">
+            <!-- Quadrant's rows are only ~13px tall on average — shorter than even the
+                 smallest label's own line-height, so a number there just gets clipped by
+                 the row's overflow:hidden safety net (see script below) no matter how
+                 infrequently it's shown. Skip axis numbers on quadrant entirely. -->
+            {% unless view == 4 %}
+              <span class="label {{ axis_cls }} {% if row.bold %}font--bold{% endif %}">{{ row.hour }}</span>
+            {% endunless %}
+          </div>
+        {% endfor %}
+      </div>
+      {% for day in days %}
+        <div class="col--span-4 flex flex--col gap--none border--v-1">
+          {% for seg in day.segments %}
+            {% if seg.type == "spacer" %}
+              {% if seg.night %}
+                <!-- Sunrise/sunset used to draw a thin tinted line (like "now"), but on the
+                     real grayscale device a 1-3px sliver against an already-striped background
+                     was unreadable. Shading the whole night span is a large-area signal instead
+                     — same fix as the hour zebra-stripe, applied to day/night. Solid black read
+                     as too harsh; a darker pair of grays keeps the same alternating-stripe
+                     texture as daytime (gray-N: lower number is darker) while staying clearly
+                     darker than the darkest daytime tone (gray-40, used below). -->
+                {% assign spacer_bg = "bg--gray-20" %}
+                {% if seg.shade == 1 %}{% assign spacer_bg = "bg--gray-30" %}{% endif %}
+              {% elsif day.is_today %}
+                {% assign spacer_bg = "" %}
+                {% if seg.shade == 1 %}{% assign spacer_bg = "bg--gray-60" %}{% endif %}
+              {% else %}
+                {% assign spacer_bg = "bg--gray-70" %}
+                {% if seg.shade == 1 %}{% assign spacer_bg = "bg--gray-40" %}{% endif %}
+              {% endif %}
+              <div class="h--[{{ seg.pct }}cqh] w--full cal-row {{ spacer_bg }}" style="position:relative;">
+                {% if seg.weather %}
+                  <!-- Significant weather (rain/snow/storm/fog) as a diagonal hatch instead of
+                       an icon or line — a repeating pattern is still a large-area signal (survives
+                       the same way the zebra-stripe does) but reads as "texture" layered on top
+                       of the night/day fill rather than replacing it, so day/night stays visible
+                       underneath. One visual treatment for all categories for now; distinguishing
+                       rain vs snow vs storm visually can follow if that turns out to matter. -->
+                  <div style="position:absolute;top:0;left:0;right:0;bottom:0;background-image:repeating-linear-gradient(135deg, rgba(0,0,0,0.4) 0px, rgba(0,0,0,0.4) 3px, transparent 3px, transparent 9px);"></div>
+                {% endif %}
+                {% for mark in seg.marks %}
+                  {% if seg.night %}
+                    <div class="h--[3px] w--full bg--white"></div>
+                  {% else %}
+                    <div class="h--[3px] w--full bg--red"></div>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="h--[{{ seg.pct }}cqh] grid grid--cols-{{ seg.lanes.size }} gap--xsmall px--[2px] py--[2px] cal-row">
+                {% for lane in seg.lanes %}
+                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-30 rounded--small p--2 flex flex--col flex--center-y cal-fit-box">
+                    <span class="title text--white cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  // Binary-search the largest font size that fits each event title inside its own
+  // block, measured against the real rendered box (adapted from the fit-text technique
+  // in trmnl-moppen-plugin) — more robust than guessing a size tier server-side, since
+  // it reacts to the block's *actual* pixel height on whichever device renders it.
+  function fit(el) {
+    var box = el.closest('.cal-fit-box');
+    if (!box) return;
+    // Clip rather than let oversized text grow the box — a flex/grid item otherwise
+    // auto-expands to fit its content, which would push every later hour off-screen.
+    box.style.overflow = 'hidden';
+    el.style.overflowWrap = 'anywhere'; // let a single long word break rather than
+                                         // overflow a narrow (multi-lane) block sideways
+    el.style.display = 'block';         // make width/maxWidth apply predictably
+    var min = parseInt(el.getAttribute('data-fit-min'), 10) || 11;
+    var max = parseInt(el.getAttribute('data-fit-max'), 10) || 90;
+    // clientHeight/clientWidth include the box's own padding, which the text can't
+    // actually occupy — read the real computed padding instead of guessing a fixed
+    // buffer (a wrong guess here previously let text render past the edge uncaught).
+    var boxCs = getComputedStyle(box);
+    var padX = (parseFloat(boxCs.paddingLeft) || 0) + (parseFloat(boxCs.paddingRight) || 0);
+    var availW = box.clientWidth - padX - 2;
+    if (availW <= 0) { el.style.fontSize = min + 'px'; return; }
+    // Give the element its own hard width ceiling and compare it against ITSELF
+    // (scrollWidth vs its own clientWidth) rather than against a separate ancestor's
+    // measurements — comparing across two different elements' box models proved
+    // unreliable here (text rendered clipped despite scrollWidth appearing to fit the
+    // parent). Self-comparison after pinning width is a much harder guarantee.
+    el.style.maxWidth = availW + 'px';
+
+    function setSize(px) {
+      el.style.fontSize = px + 'px';
+      el.style.lineHeight = Math.round(px * 1.15) + 'px';
+    }
+    function fits() {
+      return box.scrollHeight <= box.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1;
+    }
+
+    setSize(max);
+    if (fits()) return;
+
+    var lo = min, hi = max;
+    setSize(lo);
+    if (!fits()) return; // even the minimum doesn't fit — leave it, clipped by the box
+
+    while (hi - lo > 1) {
+      var mid = Math.floor((lo + hi) / 2);
+      setSize(mid);
+      if (fits()) { lo = mid; } else { hi = mid; }
+    }
+    setSize(lo);
+    // Binary search assumes fit is monotonic in font size, but wrapping can make a
+    // slightly larger size measure as "fits" (text reflows to fewer/narrower lines)
+    // right next to a smaller size that doesn't — a non-monotonic edge case the search
+    // can land on wrong. Belt-and-braces: step down further, actually re-checking after
+    // each step, until it genuinely fits (or we hit the floor).
+    while (!fits() && lo > min) {
+      lo -= 1;
+      setSize(lo);
+    }
+
+    // The binary search maximizes font size, which happily picks a size that wraps a
+    // single word to a near-empty second line (e.g. "Speelpun" / "t") if that barely
+    // satisfies the height budget — technically "fits", but reads as broken. If the
+    // chosen size doesn't fit on one line, look for a modestly smaller size that does;
+    // prefer a slightly smaller, cleanly single-line title over a bigger, badly-split one.
+    var lineH = Math.round(lo * 1.15);
+    if (el.scrollHeight > lineH + 2) {
+      var found = null;
+      var floor = Math.max(min, Math.floor(lo * 0.7));
+      for (var s = lo - 1; s >= floor; s--) {
+        setSize(s);
+        if (el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= Math.round(s * 1.15) + 2) {
+          found = s;
+          break;
+        }
+      }
+      setSize(found !== null ? found : lo);
+    }
+  }
+
+  function run() {
+    var root = document.getElementById('cal-root');
+    if (!root) return;
+    // Every h--[Ncqh] row must be prevented from growing past its allocation — a flex/grid
+    // child otherwise auto-expands to fit oversized content (e.g. an hour-number label too
+    // tall for a very short row on the small quadrant view), which cascades into the whole
+    // grid overflowing and later hours being pushed off-screen. Constrain first, then fit.
+    var rows = root.querySelectorAll('.cal-row');
+    for (var r = 0; r < rows.length; r++) rows[r].style.overflow = 'hidden';
+    var titles = root.querySelectorAll('.cal-fit-text');
+    for (var i = 0; i < titles.length; i++) fit(titles[i]);
+  }
+
+  // Wait for the Inter webfont to finish loading before measuring. If fit() measures
+  // against the fallback font (narrower/wider metrics) before Inter swaps in, the text
+  // reflows after fit() has already locked in a size, silently overflowing the box it
+  // was just fitted to (clipped by the box's own overflow:hidden with no way to react).
+  function runAfterFonts() {
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(run).catch(run);
+    } else {
+      run();
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', runAfterFonts);
+  } else {
+    runAfterFonts();
+  }
+})();
+</script>
+{% endtemplate %}
