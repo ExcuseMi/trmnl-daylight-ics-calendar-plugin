@@ -1,4 +1,4 @@
-# Local dev config for `trmnlp serve`.
+# Local dev config.
 watch:
 - .trmnlp.yml
 - src
@@ -12,41 +12,63 @@ variables:
       locale: nl
       time_zone_iana: Europe/Brussels
     plugin_settings:
-      instance_name: Daylight ICS Calendar
+      instance_name: Daylight & Weather Calendar
       strategy: polling
       dark_mode: 'no'
       no_screen_padding: 'yes'
       custom_fields_values:
-        ics_url: https://cloud.example.com/remote.php/dav/public-calendars/TOKEN/?export
+        ics_url: https://cloud.example.com/x.ics
         time_zone: Europe/Brussels
-        time_format: 24h
-        location: Brussels
-  header_pct: 11
-  allday_pct: 9
-  grid_pct: 80
+        view_days: '3'
+  header_pct: 15
+  allday_pct: 0
+  grid_pct: 85
+  title_bar_pct: 0
+  show_title_bar: false
+  title_text: Daylight & Weather Calendar
   hour_rows:
+  - hour: 0
+    pct: 2
+    shade: 0
+    bold: false
+  - hour: 1
+    pct: 2
+    shade: 1
+    bold: false
+  - hour: 2
+    pct: 2
+    shade: 0
+    bold: false
+  - hour: 3
+    pct: 2
+    shade: 1
+    bold: false
+  - hour: 4
+    pct: 2
+    shade: 0
+    bold: false
   - hour: 5
-    pct: 4
+    pct: 5
     shade: 1
     bold: false
   - hour: 6
-    pct: 5
+    pct: 4
     shade: 0
-    bold: false
+    bold: true
   - hour: 7
     pct: 4
     shade: 1
     bold: false
   - hour: 8
-    pct: 5
+    pct: 4
     shade: 0
     bold: false
   - hour: 9
     pct: 4
     shade: 1
-    bold: true
+    bold: false
   - hour: 10
-    pct: 5
+    pct: 4
     shade: 0
     bold: false
   - hour: 11
@@ -54,19 +76,19 @@ variables:
     shade: 1
     bold: false
   - hour: 12
-    pct: 5
+    pct: 4
     shade: 0
     bold: false
   - hour: 13
     pct: 4
     shade: 1
-    bold: true
+    bold: false
   - hour: 14
     pct: 4
     shade: 0
-    bold: false
+    bold: true
   - hour: 15
-    pct: 5
+    pct: 4
     shade: 1
     bold: false
   - hour: 16
@@ -74,7 +96,7 @@ variables:
     shade: 0
     bold: false
   - hour: 17
-    pct: 5
+    pct: 4
     shade: 1
     bold: false
   - hour: 18
@@ -82,396 +104,386 @@ variables:
     shade: 0
     bold: false
   - hour: 19
-    pct: 5
+    pct: 4
     shade: 1
     bold: false
   - hour: 20
     pct: 4
     shade: 0
-    bold: true
+    bold: false
   - hour: 21
-    pct: 5
+    pct: 4
     shade: 1
     bold: false
   - hour: 22
     pct: 4
     shade: 0
+    bold: true
+  - hour: 23
+    pct: 2
+    shade: 1
     bold: false
   days:
-  - label: Vr 3 Juli
-    is_today: true
-    allday:
-    - title: Verlof Charlotte
-      hue: blue
-    segments:
-    - type: spacer
-      pct: 3
-      shade: 1
-      marks: []
-      night: true
-      weather: null
-    - type: spacer
-      pct: 1
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 0
-      shade: 0
-      marks: []
-      night: false
-      weather: rain
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: rain
-    - type: spacer
-      pct: 0
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: event
-      pct: 10
-      lanes:
-      - title: Powerdance discotheek
-        hue: green
-    - type: spacer
-      pct: 3
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: event
-      pct: 10
-      lanes:
-      - title: Avondwandeling
-        hue: orange
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 1
-      shade: 1
-      marks: []
-      night: true
-      weather: null
-    - type: spacer
-      pct: 2
-      shade: 0
-      marks: []
-      night: true
-      weather: null
-    - type: spacer
-      pct: 2
-      shade: 0
-      marks:
-      - hour: 22.5
-        kind: now
-      night: true
-      weather: null
   - label: Za 4 Juli
-    is_today: false
+    is_today: true
+    temp:
+      high: 28
+      low: 16
+    icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
     allday: []
     segments:
-    - type: spacer
-      pct: 3
-      shade: 1
-      marks: []
+    - pct: 2
+      shade: 0
       night: true
       weather: null
-    - type: spacer
-      pct: 1
+    - pct: 2
       shade: 1
-      marks: []
-      night: false
+      night: true
       weather: null
-    - type: spacer
-      pct: 5
+    - pct: 2
       shade: 0
-      marks: []
-      night: false
+      night: true
       weather: null
-    - type: spacer
-      pct: 4
+    - pct: 2
       shade: 1
-      marks: []
-      night: false
+      night: true
       weather: null
-    - type: spacer
-      pct: 5
+    - pct: 2
       shade: 0
-      marks: []
-      night: false
+      night: true
       weather: null
-    - type: spacer
-      pct: 4
+    - pct: 3
       shade: 1
-      marks: []
-      night: false
+      night: true
       weather: null
-    - type: spacer
-      pct: 5
-      shade: 0
-      marks: []
-      night: false
-      weather: snow
-    - type: spacer
-      pct: 4
+    - pct: 2
       shade: 1
-      marks: []
       night: false
       weather: null
-    - type: spacer
-      pct: 5
+    - pct: 4
       shade: 0
-      marks: []
       night: false
       weather: null
-    - type: event
-      pct: 11
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 0
+      shade: 1
+      night: true
+      weather: null
+    - pct: 4
+      shade: 0
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    events:
+    - top_pct: 55.2941
+      height_pct: 11.7647
       lanes:
       - title: Speelpunt
         hue: blue
-    - type: spacer
-      pct: 2
-      shade: 1
-      marks: []
+    now_marker:
+      top_pct: 89.9439
       night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 1
-      shade: 1
-      marks: []
-      night: true
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: true
-      weather: null
   - label: Zo 5 Juli
     is_today: false
+    temp:
+      high: 25
+      low: 18
+    icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
     allday: []
     segments:
-    - type: spacer
-      pct: 3
-      shade: 1
-      marks: []
+    - pct: 2
+      shade: 0
       night: true
       weather: null
-    - type: spacer
-      pct: 1
+    - pct: 2
       shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 5
-      shade: 1
-      marks: []
-      night: false
-      weather: storm
-    - type: spacer
-      pct: 4
-      shade: 0
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 4
-      shade: 1
-      marks: []
-      night: false
-      weather: null
-    - type: spacer
-      pct: 1
-      shade: 1
-      marks: []
       night: true
       weather: null
-    - type: spacer
-      pct: 4
+    - pct: 2
       shade: 0
-      marks: []
       night: true
       weather: null
-  generated_at: 1783117849
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    - pct: 2
+      shade: 0
+      night: true
+      weather: null
+    - pct: 3
+      shade: 1
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 0
+      shade: 1
+      night: true
+      weather: null
+    - pct: 4
+      shade: 0
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    events:
+    - top_pct: 17.6471
+      height_pct: 11.7647
+      lanes:
+      - title: Vroege zwemles
+        hue: green
+    now_marker: null
+  - label: Ma 6 Juli
+    is_today: false
+    temp:
+      high: 29
+      low: 19
+    icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
+    allday: []
+    segments:
+    - pct: 2
+      shade: 0
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    - pct: 2
+      shade: 0
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    - pct: 2
+      shade: 0
+      night: true
+      weather: null
+    - pct: 3
+      shade: 1
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 0
+      shade: 1
+      night: true
+      weather: null
+    - pct: 4
+      shade: 0
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    events:
+    - top_pct: 92.9412
+      height_pct: 7.0588
+      lanes:
+      - title: Laat etentje
+        hue: orange
+    now_marker: null
+  generated_at: 1783192907
   tz: Europe/Brussels
   error: null
   unavailable_label: Kalender niet beschikbaar

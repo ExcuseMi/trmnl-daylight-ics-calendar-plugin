@@ -1,0 +1,54 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TRMNL Daylight Calendar//Demo Data//EN
+CALSCALE:GREGORIAN
+
+BEGIN:VEVENT
+UID:demo-personal-gym@trmnl-daylight-calendar
+DTSTAMP:20260601T000000Z
+DTSTART;TZID=Europe/Brussels:20260601T070000
+DTEND;TZID=Europe/Brussels:20260601T080000
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR
+SUMMARY:Gym Class
+DESCRIPTION:Early-morning recurring event, good for testing the automatic "important range" expanding to cover pre-sunrise hours.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-personal-run@trmnl-daylight-calendar
+DTSTAMP:20260601T000000Z
+DTSTART;TZID=Europe/Brussels:20260606T080000
+DTEND;TZID=Europe/Brussels:20260606T100000
+RRULE:FREQ=WEEKLY;BYDAY=SA
+SUMMARY:Weekend Long Run
+DESCRIPTION:Weekly, Saturdays only.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-personal-dentist@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260709T103000
+DTEND;TZID=Europe/Brussels:20260709T111500
+SUMMARY:Dentist Appointment
+DESCRIPTION:One-off, non-recurring event.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-personal-birthday@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;VALUE=DATE:20260710
+DTEND;VALUE=DATE:20260711
+RRULE:FREQ=YEARLY
+SUMMARY:Sam's Birthday
+DESCRIPTION:All-day, recurs every year (YEARLY).
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-personal-dinner@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260704T210000
+DTEND;TZID=Europe/Brussels:20260704T230000
+SUMMARY:Late Dinner
+DESCRIPTION:Late-evening one-off event, good for testing the important range expanding past sunset.
+END:VEVENT
+
+END:VCALENDAR

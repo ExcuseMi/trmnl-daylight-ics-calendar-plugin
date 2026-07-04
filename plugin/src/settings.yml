@@ -14,14 +14,14 @@ custom_fields:
 - keyname: author_info
   name: About This Plugin
   field_type: author_bio
-  description: 3-day agenda from any ICS calendar feed (Nextcloud or otherwise), with sunrise/sunset lines on the timeline. Auto-detects your language and time format from your TRMNL account.<br /><br />Runs on TRMNL <strong>Serverless</strong> — no server to host.
+  description: A smart-scaling agenda from any ICS calendar feed, where the timeline auto-expands the hours that matter (daylight and your meetings) and shrinks the quiet ones, so your day never gets squeezed into a tiny sliver of the screen. Combine multiple calendars, each shown in its own color, with sunrise/sunset and daily weather right alongside your events. 1 day to a week of coverage. Auto-detects your language and time format from your TRMNL account.<br /><br />Runs on TRMNL <strong>Serverless</strong>, no server to host.
   github_url: https://github.com/ExcuseMi/trmnl-daylight-ics-calendar-plugin
   category: calendar
   help_text: TRMNL X Ready
 - keyname: ics_url
   field_type: text
   name: Calendar ICS URLs
-  description: One ICS link per line to combine several calendars. Nextcloud → Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong> (ends in <code>?export</code> or <code>.ics</code>). <code>webcal://</code> links work too.
+  description: One ICS link per line to combine several calendars, each gets its own color. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.
   placeholder: |-
     https://cloud.example.com/remote.php/dav/public-calendars/TOKEN1/?export
     https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export
@@ -41,23 +41,34 @@ custom_fields:
 - keyname: location
   field_type: string
   name: Location (for sunrise/sunset)
-  description: City name (e.g. <code>Brussels</code>) or coordinates as <code>lat,lon</code>. Leave blank to hide sun times.
+  description: City name (e.g. <code>Brussels</code>) or coordinates as <code>lat,lon</code>. Also used to decide which hours of the grid get emphasized (daylight hours, expanded, are shown alongside your actual meetings). Leave blank to hide sun times and emphasize by meetings alone.
   optional: true
-- keyname: day_start
-  field_type: number
-  name: Grid starts at (hour)
-  description: First hour shown on the calendar grid (0–23).
-  default: 8
-  min: 0
-  max: 23
-  step: 1
-- keyname: day_end
-  field_type: number
-  name: Grid ends at (hour)
-  description: Last hour shown on the calendar grid (1–24). Must be after the start hour.
-  default: 22
-  min: 1
-  max: 24
-  step: 1
-name: Daylight ICS Calendar (3-day)
+- keyname: temperature_unit
+  field_type: select
+  name: Temperature Unit
+  description: Used for the daily high/low shown under each day (requires Location above).
+  options:
+  - Celsius (°C): celsius
+  - Fahrenheit (°F): fahrenheit
+  default: celsius
+- keyname: view_days
+  field_type: select
+  name: Days to Show
+  description: How many days the calendar grid covers, starting today.
+  options:
+  - 1 day: '1'
+  - 2 days: '2'
+  - 3 days: '3'
+  - 5 days: '5'
+  - 1 week: '7'
+  default: '3'
+- keyname: show_title_bar
+  field_type: select
+  name: Title Bar
+  description: Shows a bar with this plugin instance's name across the top of the screen. Off by default to leave more room for the calendar grid.
+  options:
+  - 'Off': 'no'
+  - 'On': 'yes'
+  default: 'no'
+name: Daylight & Weather Calendar
 refresh_interval: 15

@@ -1,0 +1,64 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TRMNL Daylight Calendar//Demo Data//EN
+CALSCALE:GREGORIAN
+
+BEGIN:VEVENT
+UID:demo-work-standup@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260706T090000
+DTEND;TZID=Europe/Brussels:20260706T091500
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+EXDATE;TZID=Europe/Brussels:20260707T090000
+SUMMARY:Daily Standup
+DESCRIPTION:Recurring weekday event (WEEKLY+BYDAY) with one cancelled instance (EXDATE) on the Tuesday.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-work-1on1@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260106T140000
+DTEND;TZID=Europe/Brussels:20260106T143000
+RRULE:FREQ=WEEKLY;BYDAY=TU
+SUMMARY:1:1 with Manager
+DESCRIPTION:Weekly recurring, single weekday (BYDAY=TU).
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-work-allhands@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260701T100000
+DTEND;TZID=Europe/Brussels:20260701T110000
+RRULE:FREQ=MONTHLY
+SUMMARY:Monthly All-Hands
+DESCRIPTION:Recurs on the 1st of every month (MONTHLY, no BYDAY support in this parser).
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-work-launch@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;VALUE=DATE:20260705
+DTEND;VALUE=DATE:20260708
+SUMMARY:Product Launch Week
+DESCRIPTION:Multi-day all-day event, spans several day columns as one chip.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-work-clientcall@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260704T150000
+DTEND;TZID=Europe/Brussels:20260704T160000
+SUMMARY:Client Call
+DESCRIPTION:Overlaps with Budget Review below to test side-by-side lane splitting.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-work-budget@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260704T153000
+DTEND;TZID=Europe/Brussels:20260704T163000
+SUMMARY:Budget Review
+DESCRIPTION:Overlaps with Client Call above to test side-by-side lane splitting.
+END:VEVENT
+
+END:VCALENDAR

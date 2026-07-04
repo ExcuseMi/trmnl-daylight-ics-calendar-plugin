@@ -1,0 +1,53 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TRMNL Daylight Calendar//Demo Data//EN
+CALSCALE:GREGORIAN
+
+BEGIN:VEVENT
+UID:demo-family-schoolrun@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260706T080000
+DTEND;TZID=Europe/Brussels:20260706T082000
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+SUMMARY:School Run
+DESCRIPTION:Recurring weekday event, short duration.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-family-piano@trmnl-daylight-calendar
+DTSTAMP:20260601T000000Z
+DTSTART;TZID=Europe/Brussels:20260604T160000
+DTEND;TZID=Europe/Brussels:20260604T164500
+RRULE:FREQ=WEEKLY;BYDAY=TH
+SUMMARY:Piano Lesson
+DESCRIPTION:Weekly, Thursdays only. Overlaps with Soccer Practice below on the same day to test cross-calendar lane splitting.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-family-soccer@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;TZID=Europe/Brussels:20260709T160000
+DTEND;TZID=Europe/Brussels:20260709T170000
+SUMMARY:Soccer Practice
+DESCRIPTION:One-off, overlaps with Piano Lesson (a different calendar/color) at the same time.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-family-holiday@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;VALUE=DATE:20260706
+DTEND;VALUE=DATE:20260707
+SUMMARY:Public Holiday
+DESCRIPTION:Single-day all-day chip.
+END:VEVENT
+
+BEGIN:VEVENT
+UID:demo-family-vacation@trmnl-daylight-calendar
+DTSTAMP:20260701T000000Z
+DTSTART;VALUE=DATE:20260711
+DTEND;VALUE=DATE:20260716
+SUMMARY:Family Vacation
+DESCRIPTION:Multi-day all-day event starting near the edge of the default view, useful for testing the "1 week" Days to Show option.
+END:VEVENT
+
+END:VCALENDAR

@@ -1,10 +1,21 @@
 {% template main %}
+<style>
+/* The framework's static title/label classes cap out at --xxlarge (40px/30px) — no bigger
+   tier exists to reach for on the full view's day label when it's already sitting at that
+   ceiling in landscape. Rotated to portrait, the same "OG" 800x480 device has much taller
+   rows to spend, so bump it further with a plain override scoped to the real screen--lg +
+   screen--portrait combo the framework's own compiled CSS uses (confirmed via its generated
+   selectors, e.g. .screen--lg.screen--portrait .lg\:portrait\:title--xxlarge). */
+.trmnl .screen--lg.screen--portrait .cal-full-daylabel { font-size: 44px; }
+</style>
 {%- if view == 4 -%}
   {%- comment -%} quadrant: a quarter of the full-view screen area — needs its own,
   smaller floor rather than sharing full's or even the half-views' sizes. {%- endcomment -%}
   {%- assign head_title_cls = "title--small" -%}
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--small" -%}
+  {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
+  {%- assign daylabel_pad_cls = "p--2" -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
   width-constrained rather than area-constrained, so it needs a smaller tier than
@@ -12,19 +23,58 @@
   {%- assign head_title_cls = "title--base lg:title--large" -%}
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
+  {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
+  {%- assign daylabel_pad_cls = "p--2" -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half height — width is ample,
   so it can keep a larger tier than half_vertical. {%- endcomment -%}
   {%- assign head_title_cls = "title--large lg:title--xlarge" -%}
   {%- assign chip_title_cls = "title--small lg:title--base" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
+  {%- assign event_pad_cls = "pt--1 pb--2 px--2" -%}
+  {%- assign daylabel_pad_cls = "p--2" -%}
 {%- else -%}
+  {%- comment -%} full / "OG" 800x480 device: the hour axis at xlarge/xxlarge read too big
+  in practice — one tier down still reads fine at this size and leaves more room. Rotated to
+  portrait, the same device has much taller rows and narrower columns, so it can (and should)
+  read bigger still — lg:portrait: is a real combinator the framework generates (confirmed via
+  its compiled CSS, e.g. .screen--lg.screen--portrait .lg\:portrait\:title--xxlarge), so temps
+  get one more explicit tier there; the day label is already at the framework's largest static
+  tier (title--xxlarge) even without portrait, so it needs a custom size bump instead (see the
+  cal-full-daylabel rule below the template). {%- endcomment -%}
   {%- assign head_title_cls = "title--xlarge lg:title--xxlarge" -%}
-  {%- assign chip_title_cls = "title--base lg:title--large" -%}
-  {%- assign axis_cls = "label--xlarge lg:label--xxlarge" -%}
+  {%- assign chip_title_cls = "title--base lg:title--large lg:portrait:title--xlarge" -%}
+  {%- assign axis_cls = "label--large lg:label--xxlarge" -%}
+  {%- assign event_pad_cls = "pt--1 pb--2 px--2" -%}
+  {%- comment -%} The day-label pill's text sits visually low inside it — this font's
+  line-height carries more empty space above the glyphs than below, so an even p--2 on all
+  sides reads as too much padding on top specifically. Trim just the top. {%- endcomment -%}
+  {%- assign daylabel_pad_cls = "pt--1 pb--2 px--2" -%}
+{%- endif -%}
+
+{%- comment -%} Every tier above assumes the original 3-day layout's column width. With
+Days to Show now configurable, the SAME day columns get much narrower at 5 or 7 days —
+"Za 4 Juli" fit fine at 3 columns wide but "Zo 5 Juli" wrapped and lost "Juli" off the
+bottom of the fixed-height header at 7. Force the day-label down a tier (or two) once
+there are more columns than the sizes above were tuned for, regardless of view. {%- endcomment -%}
+{%- if days.size >= 6 -%}
+  {%- assign head_title_cls = "title--small" -%}
+  {%- assign chip_title_cls = "title--small" -%}
+{%- elsif days.size >= 4 -%}
+  {%- assign head_title_cls = "title--base lg:title--large" -%}
+  {%- assign chip_title_cls = "title--small" -%}
 {%- endif -%}
 
 <div class="layout layout--col gap--none" id="cal-root">
+  {% if show_title_bar %}
+    <!-- Optional, off by default (see the "Title Bar" setting) — its height comes out of
+         the same 100%-of-screen budget as everything else (title_bar_pct, computed
+         server-side in transform.py), so grid_pct still shrinks to make room rather than
+         this bar overlapping or pushing the grid off-screen. -->
+    <div class="h--[{{ title_bar_pct }}cqh] w--full flex flex--center-x flex--center-y">
+      <span class="title {{ head_title_cls }}">{{ title_text }}</span>
+    </div>
+  {% endif %}
   {% if error and has_events == false %}
     <div class="item">
       <div class="content">
@@ -38,23 +88,111 @@
          device — including the larger, portrait, 4-bit TRMNL X — via the framework's
          own container-query system instead of a fixed-aspect picture. -->
 
-    <div class="grid grid--cols-13 gap--none h--[{{ header_pct }}cqh]">
+    <div class="grid gap--none h--[{{ header_pct }}cqh]">
       <div class="col--span-1"></div>
       {% for day in days %}
-        <div class="col--span-4 flex flex--col flex--center-x flex--center-y border--v-1">
-          {% if day.is_today %}
-            <div class="bg--black rounded--small px--[10px] py--[2px]">
-              <span class="title {{ head_title_cls }} p--2 text--white">{{ day.label }}</span>
+        <!-- gap--xsmall is explicit rather than relying on the framework's default flex gap:
+             today's label is wrapped in an extra div (the black pill) that plain-text days
+             don't have, and without a deliberate gap value here the two box shapes ended up
+             with visibly different spacing before the temp line below them. -->
+        <div class="col--span-4 flex flex--col flex--center-x flex--center-y gap--xsmall border--v-1">
+          {% if view == 4 %}
+            <!-- Quadrant can also render in a PORTRAIT-oriented slot (much narrower columns
+                 than the landscape quadrant this was tuned against), where the plain flex row
+                 below shrink-wrapped to the label's full natural width and overflowed sideways
+                 into the next day's column instead of truncating — needs real width constraints
+                 the landscape-only case below doesn't. w--full gives the row something concrete
+                 to truncate the label against (the day column's own width); min-width:0 on the
+                 label wrapper undoes the flex default of min-width:auto (natural content width),
+                 which otherwise silently defeats overflow/ellipsis truncation on the child. -->
+            <div class="flex flex--row flex--center-y gap--xsmall w--full">
+              {% if day.is_today %}
+                <div class="bg--black rounded--small px--[10px] py--[2px]" style="min-width:0;overflow:hidden;">
+                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ day.label }}</span>
+                </div>
+              {% else %}
+                <div class="rounded--small px--[10px] py--[2px]" style="min-width:0;overflow:hidden;">
+                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ day.label }}</span>
+                </div>
+              {% endif %}
+              {% if day.icon %}
+                <!-- Hidden in portrait (quadrant can render in a much narrower portrait slot,
+                     see above) and on the smallest screen bucket — the day label alone is
+                     already tight there; adding the icon back in just re-creates the same
+                     crowding, only now with an image squeezed in too. -->
+                <img class="w--[26px] sm:hidden portrait:hidden" style="flex-shrink:0;" src="{{ day.icon }}">
+              {% endif %}
+            </div>
+          {% elsif view == 2 %}
+            <!-- half_horizontal is short (header_pct is shared across all four views) but not
+                 narrow — full 800px width plenty for day-label + icon on one line — so it
+                 keeps the original, simpler markup rather than the width-constrained version
+                 quadrant needs; that version's min-width:0 caused it to truncate more
+                 aggressively than necessary here, where it already fit fine. -->
+            <div class="flex flex--row flex--center-y gap--xsmall">
+              {% if day.is_today %}
+                <div class="bg--black rounded--small px--[10px] py--[2px]">
+                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white">{{ day.label }}</span>
+                </div>
+              {% else %}
+                <div class="rounded--small px--[10px] py--[2px]">
+                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}">{{ day.label }}</span>
+                </div>
+              {% endif %}
+              {% if day.icon %}
+                <!-- Same reasoning as quadrant above: hidden in portrait or on the smallest
+                     screen bucket, where this view is tight even before adding an icon. -->
+                <img class="w--[26px] sm:hidden portrait:hidden" src="{{ day.icon }}">
+              {% endif %}
             </div>
           {% else %}
-            <span class="title {{ head_title_cls }} p--2">{{ day.label }}</span>
+            <!-- Shared label markup for half_vertical (view 3) and full — see the max-width:100%
+                 reasoning below. half_vertical additionally never shows the icon/temp row: at
+                 only ~133px per day column there isn't room for it alongside the label without
+                 wrapping, so it's full-view only (see the view == 3 check further down). -->
+            <!-- Same wrapper div/padding for both branches — otherwise the pill's own
+                 padding adds height the plain-text case doesn't have, so the identical
+                 gap below still ends up looking different since it starts from a
+                 different total label-block height. max-width:100% (not w--full — that
+                 would stretch the black pill's background across the whole column instead
+                 of just hugging the text, changing the look even when there's plenty of
+                 room) caps it at the column's real width only when needed: full/half_vertical
+                 can ALSO end up in a portrait slot (the "OG" 800x480 device rotated), where
+                 day columns get much narrower than the landscape case this tier was tuned
+                 against, and a plain flex--col child has no upper bound on its content-based
+                 width by default — it just overflows sideways into the next column instead
+                 of clamping to one line. -->
+            {% if day.is_today %}
+              <div class="bg--black rounded--small px--[10px] py--[2px]" style="max-width:100%;overflow:hidden;">
+                <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white{% unless view == 3 %} cal-full-daylabel{% endunless %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ day.label }}</span>
+              </div>
+            {% else %}
+              <div class="rounded--small px--[10px] py--[2px]" style="max-width:100%;overflow:hidden;">
+                <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}{% unless view == 3 %} cal-full-daylabel{% endunless %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ day.label }}</span>
+              </div>
+            {% endif %}
+            {% if day.icon and view != 3 %}
+              <!-- max-width:100%/overflow:hidden on the row (same treatment as the day label
+                   above) — without it, the lg:portrait: size bump on chip_title_cls made this
+                   row wider than the narrow portrait column and it bled into the next day's
+                   column instead of clipping to its own. min-width:0 on the span undoes the
+                   flex default of min-width:auto, which otherwise silently blocks its own
+                   ellipsis from ever kicking in. -->
+              <div class="flex flex--row flex--center-y gap--xsmall" style="max-width:100%;overflow:hidden;">
+                <!-- height:1.6em ties the icon to whatever chip_title_cls's font-size
+                     resolves to (so it still grows/shrinks with the temp text across view
+                     tiers) while rendering noticeably larger than the text itself. -->
+                <img class="{{ chip_title_cls }}" style="height:1.6em;width:auto;flex-shrink:0;" src="{{ day.icon }}">
+                <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">{{ day.temp.high }}° / {{ day.temp.low }}°</span>
+              </div>
+            {% endif %}
           {% endif %}
         </div>
       {% endfor %}
     </div>
 
     {% if allday_pct > 0 %}
-      <div class="grid grid--cols-13 gap--none h--[{{ allday_pct }}cqh]">
+      <div class="grid gap--none h--[{{ allday_pct }}cqh]">
         <div class="col--span-1"></div>
         {% for day in days %}
           <div class="col--span-4 flex flex--col gap--xsmall px--[4px] border--v-1">
@@ -68,7 +206,7 @@
       </div>
     {% endif %}
 
-    <div class="grid grid--cols-13 gap--none h--[{{ grid_pct }}cqh]">
+    <div class="grid gap--none h--[{{ grid_pct }}cqh]">
       <div class="col--span-1 flex flex--col gap--none">
         {% for row in hour_rows %}
           <!-- Zebra-stripe by hour instead of drawing boundary lines: five different
@@ -76,65 +214,92 @@
                locally, but never once showed up on the actual device. A per-hour
                background shade is a large-area fill instead of a 1-2px sliver, so it
                can't fail the same way. -->
-          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--center-x cal-row {% if row.shade == 1 %}bg--gray-60{% endif %}">
-            <!-- Quadrant's rows are only ~13px tall on average — shorter than even the
-                 smallest label's own line-height, so a number there just gets clipped by
-                 the row's overflow:hidden safety net (see script below) no matter how
-                 infrequently it's shown. Skip axis numbers on quadrant entirely. -->
-            {% unless view == 4 %}
-              <span class="label {{ axis_cls }} {% if row.bold %}font--bold{% endif %}">{{ row.hour }}</span>
-            {% endunless %}
+          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--center-x cal-row cal-fit-box {% if row.shade == 1 %}bg--gray-60{% endif %}">
+            <!-- Row height varies a lot with the configured hour range and view size — the
+                 emphasized (day_start-day_end-derived) hours get much taller rows than the
+                 compressed hours outside it, and that ratio shifts per view too. A fixed
+                 per-view font size clipped on some configurations, so this reuses the same
+                 fit-text sizing as event titles instead of hand-tuning one that only works
+                 for one row-height assumption. Even fit down to its floor, an hour number can
+                 still be taller than a truly tiny compressed row (verified: quadrant's most
+                 compressed rows are ~4px, shorter than even an 8px minimum font) — the box's
+                 own overflow:hidden (see script below) just clips those specific numbers,
+                 which is fine: the emphasized hours (the ones actually worth reading) fit
+                 exactly, and used to be hidden on quadrant entirely regardless of size. -->
+              <span class="label {{ axis_cls }} {% if row.bold %}font--bold{% endif %} cal-fit-text cal-axis-text" data-fit-min="8" data-fit-max="40">{{ row.hour }}</span>
           </div>
         {% endfor %}
       </div>
       {% for day in days %}
-        <div class="col--span-4 flex flex--col gap--none border--v-1">
+        <div class="col--span-4 flex flex--col gap--none border--v-1" style="position:relative;">
+          <!-- Background bands always render at full per-hour granularity (see
+               _layout_native) even where an event is running — events are a separate
+               absolutely-positioned overlay (below), painted on top, instead of the
+               background flattening into one shade for the event's whole span. That used
+               to make a multi-hour event show a single flat color behind it where the
+               surrounding spacers were still alternating. -->
           {% for seg in day.segments %}
-            {% if seg.type == "spacer" %}
-              {% if seg.night %}
-                <!-- Sunrise/sunset used to draw a thin tinted line (like "now"), but on the
-                     real grayscale device a 1-3px sliver against an already-striped background
-                     was unreadable. Shading the whole night span is a large-area signal instead
-                     — same fix as the hour zebra-stripe, applied to day/night. Solid black read
-                     as too harsh; a darker pair of grays keeps the same alternating-stripe
-                     texture as daytime (gray-N: lower number is darker) while staying clearly
-                     darker than the darkest daytime tone (gray-40, used below). -->
-                {% assign spacer_bg = "bg--gray-20" %}
-                {% if seg.shade == 1 %}{% assign spacer_bg = "bg--gray-30" %}{% endif %}
-              {% elsif day.is_today %}
-                {% assign spacer_bg = "" %}
-                {% if seg.shade == 1 %}{% assign spacer_bg = "bg--gray-60" %}{% endif %}
-              {% else %}
-                {% assign spacer_bg = "bg--gray-70" %}
-                {% if seg.shade == 1 %}{% assign spacer_bg = "bg--gray-40" %}{% endif %}
-              {% endif %}
-              <div class="h--[{{ seg.pct }}cqh] w--full cal-row {{ spacer_bg }}" style="position:relative;">
-                {% if seg.weather %}
-                  <!-- Significant weather (rain/snow/storm/fog) as a diagonal hatch instead of
-                       an icon or line — a repeating pattern is still a large-area signal (survives
-                       the same way the zebra-stripe does) but reads as "texture" layered on top
-                       of the night/day fill rather than replacing it, so day/night stays visible
-                       underneath. One visual treatment for all categories for now; distinguishing
-                       rain vs snow vs storm visually can follow if that turns out to matter. -->
-                  <div style="position:absolute;top:0;left:0;right:0;bottom:0;background-image:repeating-linear-gradient(135deg, rgba(0,0,0,0.4) 0px, rgba(0,0,0,0.4) 3px, transparent 3px, transparent 9px);"></div>
-                {% endif %}
-                {% for mark in seg.marks %}
-                  {% if seg.night %}
-                    <div class="h--[3px] w--full bg--white"></div>
-                  {% else %}
-                    <div class="h--[3px] w--full bg--red"></div>
-                  {% endif %}
-                {% endfor %}
-              </div>
+            {% if seg.night %}
+              <!-- Sunrise/sunset used to draw a thin tinted line (like "now"), but on the
+                   real grayscale device a 1-3px sliver against an already-striped background
+                   was unreadable. Shading the whole night span is a large-area signal instead
+                   — same fix as the hour zebra-stripe, applied to day/night. Solid black read
+                   as too harsh; a darker pair of grays keeps the same alternating-stripe
+                   texture as daytime (gray-N: lower number is darker) while staying clearly
+                   darker than the darkest daytime tone (gray-40, used below). -->
+              {% assign seg_bg = "bg--gray-20" %}
+              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-30" %}{% endif %}
+            {% elsif day.is_today %}
+              {% assign seg_bg = "" %}
+              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-60" %}{% endif %}
             {% else %}
-              <div class="h--[{{ seg.pct }}cqh] grid grid--cols-{{ seg.lanes.size }} gap--xsmall px--[2px] py--[2px] cal-row">
-                {% for lane in seg.lanes %}
-                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-30 rounded--small p--2 flex flex--col flex--center-y cal-fit-box">
+              {% assign seg_bg = "bg--gray-70" %}
+              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-40" %}{% endif %}
+            {% endif %}
+            <div class="h--[{{ seg.pct }}cqh] w--full cal-row {{ seg_bg }}" style="position:relative;">
+              {% if seg.weather %}
+                <!-- Significant weather (rain/snow/storm/fog) as a diagonal hatch instead of
+                     an icon or line — a repeating pattern is still a large-area signal (survives
+                     the same way the zebra-stripe does) but reads as "texture" layered on top
+                     of the night/day fill rather than replacing it, so day/night stays visible
+                     underneath. One visual treatment for all categories for now; distinguishing
+                     rain vs snow vs storm visually can follow if that turns out to matter. -->
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;background-image:repeating-linear-gradient(135deg, rgba(0,0,0,0.4) 0px, rgba(0,0,0,0.4) 3px, transparent 3px, transparent 9px);"></div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          {% if day.now_marker %}
+            <!-- Absolutely positioned like events, independent of the background segment
+                 list — it used to be spliced INTO a segment and enforced to a minimum
+                 visible height by borrowing pct from whichever other segment in today's
+                 column happened to be largest. That shrank a same-hour band in today's
+                 column relative to every other column (none of which ever borrow, since
+                 none of them have a "now" mark), so today's zebra stripe stopped lining up
+                 with the rest — the same class of bug the event-overlay refactor fixed. -->
+            <div style="position:absolute;left:0;right:0;top:{{ day.now_marker.top_pct }}%;">
+              {% if day.now_marker.night %}
+                <div class="h--[5px] w--full bg--white"></div>
+              {% else %}
+                <div class="h--[5px] w--full bg--red"></div>
+              {% endif %}
+            </div>
+          {% endif %}
+          {% for event in day.events %}
+            <!-- Absolutely positioned over the background stack above, sized in plain CSS %
+                 (relative to this day column, which is the nearest position:relative
+                 ancestor) rather than the cqh unit used elsewhere — cqh is relative to the
+                 whole .layout, not this nested column, so it would double-count the header/
+                 all-day rows' own height if used here. A small side inset (px--1) lets the
+                 background peek through left/right; no top/bottom inset (see below). -->
+            <div style="position:absolute;left:0;right:0;top:{{ event.top_pct }}%;height:{{ event.height_pct }}%;">
+              <div class="h--full w--full grid grid--cols-{{ event.lanes.size }} gap--xsmall px--1 cal-row">
+                {% for lane in event.lanes %}
+                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-30 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box">
                     <span class="title text--white cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
                   </div>
                 {% endfor %}
               </div>
-            {% endif %}
+            </div>
           {% endfor %}
         </div>
       {% endfor %}
@@ -148,9 +313,12 @@
   // block, measured against the real rendered box (adapted from the fit-text technique
   // in trmnl-moppen-plugin) — more robust than guessing a size tier server-side, since
   // it reacts to the block's *actual* pixel height on whichever device renders it.
-  function fit(el) {
+  // Returns the font size (px) it settled on, or null if there was no box to fit against.
+  // Pass `forced` to skip the search entirely and just apply that exact size (used to make
+  // a whole group of elements — the hour axis — share one uniform size; see run()).
+  function fit(el, forced) {
     var box = el.closest('.cal-fit-box');
-    if (!box) return;
+    if (!box) return null;
     // Clip rather than let oversized text grow the box — a flex/grid item otherwise
     // auto-expands to fit its content, which would push every later hour off-screen.
     box.style.overflow = 'hidden';
@@ -159,13 +327,24 @@
     el.style.display = 'block';         // make width/maxWidth apply predictably
     var min = parseInt(el.getAttribute('data-fit-min'), 10) || 11;
     var max = parseInt(el.getAttribute('data-fit-max'), 10) || 90;
+
+    function setSize(px) {
+      el.style.fontSize = px + 'px';
+      el.style.lineHeight = Math.round(px * 1.15) + 'px';
+    }
+
+    if (forced != null) {
+      setSize(forced);
+      return forced;
+    }
+
     // clientHeight/clientWidth include the box's own padding, which the text can't
     // actually occupy — read the real computed padding instead of guessing a fixed
     // buffer (a wrong guess here previously let text render past the edge uncaught).
     var boxCs = getComputedStyle(box);
     var padX = (parseFloat(boxCs.paddingLeft) || 0) + (parseFloat(boxCs.paddingRight) || 0);
     var availW = box.clientWidth - padX - 2;
-    if (availW <= 0) { el.style.fontSize = min + 'px'; return; }
+    if (availW <= 0) { setSize(min); return min; }
     // Give the element its own hard width ceiling and compare it against ITSELF
     // (scrollWidth vs its own clientWidth) rather than against a separate ancestor's
     // measurements — comparing across two different elements' box models proved
@@ -173,20 +352,16 @@
     // parent). Self-comparison after pinning width is a much harder guarantee.
     el.style.maxWidth = availW + 'px';
 
-    function setSize(px) {
-      el.style.fontSize = px + 'px';
-      el.style.lineHeight = Math.round(px * 1.15) + 'px';
-    }
     function fits() {
       return box.scrollHeight <= box.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1;
     }
 
     setSize(max);
-    if (fits()) return;
+    if (fits()) return max;
 
     var lo = min, hi = max;
     setSize(lo);
-    if (!fits()) return; // even the minimum doesn't fit — leave it, clipped by the box
+    if (!fits()) return lo; // even the minimum doesn't fit — leave it, clipped by the box
 
     while (hi - lo > 1) {
       var mid = Math.floor((lo + hi) / 2);
@@ -220,8 +395,10 @@
           break;
         }
       }
-      setSize(found !== null ? found : lo);
+      lo = found !== null ? found : lo;
+      setSize(lo);
     }
+    return lo;
   }
 
   function run() {
@@ -233,8 +410,36 @@
     // grid overflowing and later hours being pushed off-screen. Constrain first, then fit.
     var rows = root.querySelectorAll('.cal-row');
     for (var r = 0; r < rows.length; r++) rows[r].style.overflow = 'hidden';
-    var titles = root.querySelectorAll('.cal-fit-text');
-    for (var i = 0; i < titles.length; i++) fit(titles[i]);
+
+    // Rotated to portrait, the full-view "OG" device has much taller hour rows to spend
+    // (same total pixels, redistributed from width to height) — raise the fit-text ceiling
+    // for events and the hour axis there so they can actually use that extra room instead of
+    // stopping at the landscape-tuned cap. Only raises the CEILING the binary search may
+    // reach; it still only picks a bigger size if the real box can actually fit it.
+    var lgPortrait = !!document.querySelector('.screen--lg.screen--portrait');
+
+    // Event titles each fit independently — different lengths, different lane widths.
+    var titles = root.querySelectorAll('.cal-fit-text:not(.cal-axis-text)');
+    for (var i = 0; i < titles.length; i++) {
+      if (lgPortrait) titles[i].setAttribute('data-fit-max', '100');
+      fit(titles[i]);
+    }
+
+    // Hour axis numbers all share ONE size instead: "10"/"23" are wider than "0"-"9", so
+    // fitting each row independently to its own row's width left two-digit hours visibly
+    // smaller than the one-digit hours right next to them, even though they're the same
+    // logical label. Fit each once to find what it could individually be, then force every
+    // one down to the smallest of those ceilings for a uniform look across the whole axis.
+    var axisText = root.querySelectorAll('.cal-axis-text');
+    var minSize = null;
+    for (var j = 0; j < axisText.length; j++) {
+      if (lgPortrait) axisText[j].setAttribute('data-fit-max', '48');
+      var s = fit(axisText[j]);
+      if (s != null && (minSize === null || s < minSize)) minSize = s;
+    }
+    if (minSize !== null) {
+      for (var k = 0; k < axisText.length; k++) fit(axisText[k], minSize);
+    }
   }
 
   // Wait for the Inter webfont to finish loading before measuring. If fit() measures

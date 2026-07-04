@@ -12,11 +12,12 @@
 # parsing and recurrence expansion below are hand-rolled (no `icalendar` dependency).
 # Budget: 128 MB / 5 s — everything is bounded to the render window.
 
+import math
 import requests
 from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-DAYS = 3
+DEFAULT_DAYS = 3
 MAX_EVENTS_PER_DAY = 12
 _WD = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
@@ -27,19 +28,21 @@ def run(input):
     tzname = _cf(input, "time_zone").strip() or _user_tz(input) or "UTC"
     is_12h = _cf(input, "time_format").strip().lower() == "12h"
     location = _cf(input, "location")
-    start_h = _int(_cf(input, "day_start"), 8, 0, 23)
-    end_h = _int(_cf(input, "day_end"), 22, 1, 24)
-    if end_h <= start_h:
-        start_h, end_h = 8, 22
+    fahrenheit = _cf(input, "temperature_unit").strip().lower() == "fahrenheit"
+    days_n = _int(_cf(input, "view_days"), DEFAULT_DAYS, 1, 7)
+    show_title_bar = _cf(input, "show_title_bar").strip().lower() == "yes"
+    title_bar_pct = TITLE_BAR_PCT if show_title_bar else 0
+    title_text = _title_text(input)
 
     tz = _resolve_tz(tzname, input)
 
     if not urls:
-        return _empty(tzname, tz, t, "No ICS URL configured")
+        return _empty(tzname, tz, t, days_n, "No ICS URL configured",
+                       show_title_bar, title_bar_pct, title_text)
 
     now = datetime.now(tz)
     win_s = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    win_e = win_s + timedelta(days=DAYS)
+    win_e = win_s + timedelta(days=days_n)
 
     occ = []
     errors = []
@@ -48,7 +51,7 @@ def run(input):
             url = "https://" + url[len("webcal://"):]
         try:
             resp = requests.get(url, timeout=4,
-                                headers={"User-Agent": "TRMNL-Nextcloud-Calendar"})
+                                headers={"User-Agent": "TRMNL-ICS-Calendar"})
             resp.raise_for_status()
             _collect(resp.text, tz, win_s, win_e, occ, cal_idx)
         except Exception as exc:
@@ -61,7 +64,7 @@ def run(input):
 
     # Bucket occurrences into day columns, split into timed vs all-day.
     raw_days = []
-    for i in range(DAYS):
+    for i in range(days_n):
         d0 = win_s + timedelta(days=i)
         d1 = d0 + timedelta(days=1)
         timed, allday = [], []
@@ -91,19 +94,36 @@ def run(input):
     # current-time marker. `win_s` (today's midnight) is always "now" with the clock zeroed,
     # so this is just the elapsed time since then.
     now_h = (now - win_s).total_seconds() / 3600.0
-    sun, hourly_weather = _fetch_sky(location)
+    sun, hourly_weather, daily_temps = _fetch_sky(location, days_n, fahrenheit)
+    for i, rd in enumerate(raw_days):
+        rd["temp"] = daily_temps.get(i)
+        rd["icon"] = _day_icon(hourly_weather.get(i)) if rd["temp"] else None
 
-    # TEMP DEBUG — forcing weather flags to verify the hatch overlay actually renders on the
-    # real device (current forecast is clear, so nothing would show otherwise). Remove after
-    # confirming on-device.
-    # for h in range(int(start_h), int(end_h)):
-    #    hourly_weather.setdefault(0, {})[h] = "rain" if h % 2 == 0 else "snow"
+    # The emphasized ("important") range is automatic now, not a manual setting: it starts
+    # at sunrise or the first meeting of the visible days, whichever is earlier, and ends at
+    # sunset or the last meeting, whichever is later — so daylight hours and every actual
+    # event are always in the expanded part of the grid, never stuck in the compressed
+    # margin. Floor the start / ceil the end so a meeting or sunrise/sunset falling mid-hour
+    # still pulls its whole hour into the emphasized range. Falls back to 8-22 if there's
+    # neither sun data (no Location configured) nor any timed events to go on.
+    sun_today = sun.get(0, [])
+    sunrise_h = next((m["hour"] for m in sun_today if m["kind"] == "sunrise"), None)
+    sunset_h = next((m["hour"] for m in sun_today if m["kind"] == "sunset"), None)
+    event_starts = [e["h0"] for d in raw_days for e in d["timed"]]
+    event_ends = [e["h1"] for d in raw_days for e in d["timed"]]
+    start_candidates = [h for h in [sunrise_h] + event_starts if h is not None]
+    end_candidates = [h for h in [sunset_h] + event_ends if h is not None]
+    start_h = math.floor(min(start_candidates)) if start_candidates else 8
+    end_h = math.ceil(max(end_candidates)) if end_candidates else 22
+    end_h = max(end_h, start_h + 1)
 
-    grid = _layout_native(raw_days, start_h, end_h, now_h, sun, hourly_weather)
+    grid = _layout_native(raw_days, start_h, end_h, now_h, sun, hourly_weather,
+                          title_bar_pct=title_bar_pct)
 
     return dict(grid, generated_at=int(now.timestamp()), tz=tzname, error=err,
                 unavailable_label=t["unavailable"],
-                has_events=any(d["timed"] or d["allday"] for d in raw_days))
+                has_events=any(d["timed"] or d["allday"] for d in raw_days),
+                show_title_bar=show_title_bar, title_text=title_text)
 
 
 # ---------------------------------------------------------------- input helpers
@@ -137,6 +157,15 @@ def _cf(input, key):
         return ""
 
 
+def _title_text(input):
+    """The instance name the user gave this plugin in TRMNL, shown in the optional title bar."""
+    try:
+        name = input["trmnl"]["plugin_settings"]["instance_name"]
+        return name if isinstance(name, str) and name.strip() else "Calendar"
+    except Exception:
+        return "Calendar"
+
+
 def _safe_zone(name):
     try:
         return ZoneInfo(name)
@@ -144,19 +173,20 @@ def _safe_zone(name):
         return None
 
 
-def _empty(tzname, tz, t, msg):
+def _empty(tzname, tz, t, days_n, msg, show_title_bar=False, title_bar_pct=0, title_text=""):
     now = datetime.now(tz)
     win_s = now.replace(hour=0, minute=0, second=0, microsecond=0)
     days = []
-    for i in range(DAYS):
+    for i in range(days_n):
         d0 = win_s + timedelta(days=i)
         days.append({
             "label": _day_label(d0, t),
             "is_today": i == 0, "timed": [], "allday": [],
         })
-    grid = _layout_native(days, 8, 22, None)
+    grid = _layout_native(days, 8, 22, None, title_bar_pct=title_bar_pct)
     return dict(grid, generated_at=int(now.timestamp()), tz=tzname,
-                error=msg, unavailable_label=t["unavailable"], has_events=False)
+                error=msg, unavailable_label=t["unavailable"], has_events=False,
+                show_title_bar=show_title_bar, title_text=title_text)
 
 
 # ------------------------------------------------------------------- translations
@@ -491,7 +521,7 @@ def _parse_latlon(raw):
 def _geocode(name):
     r = requests.get("https://geocoding-api.open-meteo.com/v1/search",
                       params={"name": name, "count": 1, "format": "json"},
-                      timeout=3, headers={"User-Agent": "TRMNL-Nextcloud-Calendar"})
+                      timeout=3, headers={"User-Agent": "TRMNL-ICS-Calendar"})
     r.raise_for_status()
     results = (r.json() or {}).get("results") or []
     if not results:
@@ -516,14 +546,36 @@ def _weather_kind(code):
     return None
 
 
-def _fetch_sky(location):
-    """Sunrise/sunset + significant hourly weather for the visible days, from a single
-    Open-Meteo forecast call. `location` is either "lat,lon" or a place name (geocoded).
-    Returns (sun_marks, hourly_weather):
+# TRMNL hosts a full weather-icon set — reused here from the same set the daily-weather
+# plugin (elsewhere in this workspace) already uses. Priority order for picking ONE icon to
+# represent a whole day: worst condition wins, defaulting to sunny when nothing's flagged.
+_ICON_BASE = "https://trmnl.com/images/plugins/weather/"
+_ICON_PRIORITY = ["storm", "snow", "rain", "fog"]
+_ICON_FILE = {
+    "storm": "wi-day-thunderstorm.svg", "snow": "wi-day-snow.svg",
+    "rain": "wi-day-rain.svg", "fog": "wi-day-fog.svg", None: "wi-day-sunny.svg",
+}
+
+
+def _day_icon(hours):
+    """One representative icon URL for a day, from its {hour: kind} weather map — the worst
+    condition present anywhere in the day wins (a storm at 3pm matters more than clear
+    mornings), defaulting to sunny when nothing significant is flagged."""
+    present = set((hours or {}).values())
+    kind = next((k for k in _ICON_PRIORITY if k in present), None)
+    return _ICON_BASE + _ICON_FILE[kind]
+
+
+def _fetch_sky(location, days_n, fahrenheit=False):
+    """Sunrise/sunset + significant hourly weather + daily high/low, from a single Open-Meteo
+    forecast call. `location` is either "lat,lon" or a place name (geocoded).
+    Returns (sun_marks, hourly_weather, daily_temps):
       sun_marks:      {day_index: [{"hour", "kind"}, ...]}            kind: sunrise/sunset
       hourly_weather: {day_index: {hour_int: "rain"/"snow"/"storm"/"fog"}}
+      daily_temps:    {day_index: {"high": float, "low": float}}      Celsius, or Fahrenheit
+                                                                       if fahrenheit=True
     Best-effort only — the calendar itself is the primary feature, so any failure here
-    (bad location, network hiccup, timeout) just omits sun/weather instead of surfacing
+    (bad location, network hiccup, timeout) just omits sun/weather/temps instead of surfacing
     as a page-level error.
 
     Uses timezone="auto" so Open-Meteo derives the zone straight from the geocoded lat/lon,
@@ -531,9 +583,9 @@ def _fetch_sky(location):
     tying sun-time accuracy to our own tzdata resolution (see _resolve_tz for why that can't
     always be trusted in the Serverless sandbox).
 
-    Matched by POSITION, not by comparing date strings: requesting forecast_days=DAYS
+    Matched by POSITION, not by comparing date strings: requesting forecast_days=days_n
     guarantees Open-Meteo's daily.time[i] is "today+i" in whatever zone it resolved, and its
-    hourly arrays are DAYS*24 contiguous entries starting at day 0 hour 0 (verified against
+    hourly arrays are days_n*24 contiguous entries starting at day 0 hour 0 (verified against
     the live API). An earlier version matched by parsing/re-formatting each timestamp and
     comparing it to a locally-computed date string — any drift between how the two sides
     represented "today" (formatting, rounding, a request straddling a day boundary) silently
@@ -541,28 +593,38 @@ def _fetch_sky(location):
     today specifically while still showing for the other two days. Position can't drift."""
     location = (location or "").strip()
     if not location:
-        return {}, {}
+        return {}, {}, {}
     try:
         latlon = _parse_latlon(location) or _geocode(location)
         if not latlon:
-            return {}, {}
+            return {}, {}, {}
         lat, lon = latlon
-        r = requests.get("https://api.open-meteo.com/v1/forecast", params={
-            "latitude": lat, "longitude": lon, "daily": "sunrise,sunset",
-            "hourly": "weathercode", "timezone": "auto", "forecast_days": DAYS,
-        }, timeout=3, headers={"User-Agent": "TRMNL-Nextcloud-Calendar"})
+        params = {
+            "latitude": lat, "longitude": lon,
+            "daily": "sunrise,sunset,temperature_2m_max,temperature_2m_min",
+            "hourly": "weathercode", "timezone": "auto", "forecast_days": days_n,
+        }
+        if fahrenheit:
+            params["temperature_unit"] = "fahrenheit"
+        r = requests.get("https://api.open-meteo.com/v1/forecast", params=params,
+                          timeout=3, headers={"User-Agent": "TRMNL-ICS-Calendar"})
         r.raise_for_status()
         body = r.json() or {}
         daily = body.get("daily") or {}
         sunrises = daily.get("sunrise") or []
         sunsets = daily.get("sunset") or []
+        highs = daily.get("temperature_2m_max") or []
+        lows = daily.get("temperature_2m_min") or []
         sun_marks = {}
-        for i in range(min(DAYS, len(sunrises), len(sunsets))):
+        daily_temps = {}
+        for i in range(min(days_n, len(sunrises), len(sunsets))):
             marks = []
             for arr, kind in ((sunrises, "sunrise"), (sunsets, "sunset")):
                 dt = datetime.fromisoformat(arr[i])
                 marks.append({"hour": dt.hour + dt.minute / 60.0, "kind": kind})
             sun_marks[i] = marks
+        for i in range(min(days_n, len(highs), len(lows))):
+            daily_temps[i] = {"high": round(highs[i]), "low": round(lows[i])}
 
         # Walk hourly entries in order, incrementing the day index whenever the date
         # actually changes — robust to a DST day being 23 or 25 hours instead of assuming
@@ -577,16 +639,16 @@ def _fetch_sky(location):
             if dt.date() != prev_date:
                 day_i += 1
                 prev_date = dt.date()
-            if day_i >= DAYS:
+            if day_i >= days_n:
                 break
             if j < len(codes):
                 kind = _weather_kind(codes[j])
                 if kind is not None:
                     hourly_weather.setdefault(day_i, {})[dt.hour] = kind
 
-        return sun_marks, hourly_weather
+        return sun_marks, hourly_weather, daily_temps
     except Exception:
-        return {}, {}
+        return {}, {}, {}
 
 
 # ------------------------------------------------------------ native grid layout
@@ -597,11 +659,16 @@ def _fetch_sky(location):
 # is what lets the same numbers render correctly on any device, including the larger
 # TRMNL X. Liquid does no layout math itself; it just loops over this pre-baked structure.
 
-HEADER_PCT = 11
+HEADER_PCT = 15  # bumped from 11 to fit a second line (daily high/low) under the day label
 ALLDAY_ROW_PCT = 9
+TITLE_BAR_PCT = 6  # optional plugin-name bar at the very top, off by default (see run())
 MIN_EVENT_PCT = 10  # floor so a block is never a literally invisible sliver — actual font
                      # sizing is handled client-side by the fit-text script (see shared.liquid),
-                     # which measures the real rendered box and grows/shrinks text to match
+                     # which measures the real rendered box and grows/shrinks text to match.
+                     # Unlike every other *_pct value on this page, an event's own top_pct/
+                     # height_pct (see _layout_native) are a share of grid_pct specifically
+                     # (the day column's own height), not the whole screen — events are an
+                     # absolutely-positioned overlay sized relative to their direct container.
 
 # One hue per configured ICS URL (cycled if more calendars than hues). These are real
 # framework chromatic classes (bg--{hue}-30) — on a grayscale panel they automatically
@@ -648,98 +715,107 @@ def _cluster(events):
     return clusters
 
 
-def _enforce_min_event_pct(segments):
-    """Bump undersized event blocks up to MIN_EVENT_PCT, borrowing from the largest
-    spacers so the day column's total pct is unchanged (telescoping sum stays exact)."""
-    deficit = 0
-    for seg in segments:
-        if seg["type"] == "event" and seg["pct"] < MIN_EVENT_PCT:
-            deficit += MIN_EVENT_PCT - seg["pct"]
-            seg["pct"] = MIN_EVENT_PCT
-    if deficit <= 0:
-        return
-    spacers = sorted((s for s in segments if s["type"] == "spacer"),
-                      key=lambda s: -s["pct"])
-    for sp in spacers:
-        if deficit <= 0:
-            break
-        take = min(sp["pct"], deficit)
-        sp["pct"] -= take
-        deficit -= take
+IMPORTANT_HOUR_WEIGHT = 4  # every hour in the configured day_start-day_end range gets this
+                           # many times the vertical space of an hour outside it
 
 
-MIN_MARK_PCT = 2  # a mark landing right at the window edge (e.g. sunset a minute before
-                   # max_h) can produce a 0%-height sliver that just doesn't render — same
-                   # class of bug as undersized events, same borrow-from-largest-spacer fix.
-
-
-def _enforce_min_mark_pct(segments):
-    deficit = 0
-    for seg in segments:
-        if seg["type"] == "spacer" and seg.get("marks") and seg["pct"] < MIN_MARK_PCT:
-            deficit += MIN_MARK_PCT - seg["pct"]
-            seg["pct"] = MIN_MARK_PCT
-    if deficit <= 0:
-        return
-    donors = sorted((s for s in segments if s["type"] == "spacer" and not s.get("marks")),
-                     key=lambda s: -s["pct"])
-    for sp in donors:
-        if deficit <= 0:
-            break
-        take = min(sp["pct"], deficit)
-        sp["pct"] -= take
-        deficit -= take
-
-
-def _layout_native(days, min_h, max_h, now_h=None, sun_marks=None, hourly_weather=None):
-    min_h = max(0, min(23, int(min_h)))
-    max_h = max(min_h + 1, min(24, int(max_h)))
+def _layout_native(days, important_start, important_end, now_h=None, sun_marks=None,
+                    hourly_weather=None, title_bar_pct=0):
+    important_start = max(0, min(23, int(important_start)))
+    important_end = max(important_start + 1, min(24, int(important_end)))
 
     max_ad_rows = max((len(d["allday"]) for d in days), default=0)
     allday_pct = min(3, max_ad_rows) * ALLDAY_ROW_PCT
-    grid_base = HEADER_PCT + allday_pct
+    grid_base = HEADER_PCT + allday_pct + title_bar_pct
     grid_pct = 100 - grid_base
 
-    def pct_at(t):
-        return round(grid_base + (t - min_h) / (max_h - min_h) * grid_pct)
+    # The full day (0-24) is always shown now — day_start/day_end used to be a hard crop
+    # (hours outside just weren't rendered), but hiding the rest of the day entirely lost
+    # context. Now they mark an "important" range that gets more vertical weight per hour,
+    # while hours outside still show, just compressed.
+    #
+    # h--[Ncqh] is a bracket "arbitrary value" utility class, and — like the p--[Npx]
+    # padding bracket-value bug found earlier this project — it turns out to only work for
+    # INTEGERS: a decimal value (verified directly: h--[10.5cqh] and h--[5.1515cqh] both
+    # silently no-op, the element falling back to its unstyled content-box height) generates
+    # no CSS rule at all. So every hour in the important zone must share one INTEGER percent,
+    # and every hour outside it another — but scaling an integer weight ratio essentially
+    # never divides grid_pct evenly, so the leftover remainder has to land somewhere. Putting
+    # it on the important hours would break the exact uniformity that's the whole point here;
+    # instead spread it one-per-hour across the LEAST prominent (compressed, outside-range)
+    # hours, where a handful being 1% taller than the rest is essentially invisible. Every
+    # important hour ends up pixel-for-pixel identical; only the compressed hours have any
+    # variance at all, and only ever by 1%.
+    important_n = important_end - important_start
+    outside_n = 24 - important_n
+    total_units = IMPORTANT_HOUR_WEIGHT * important_n + outside_n
 
-    # Hour axis rows (shared reference scale — day columns snap their spacer
-    # boundaries to these same hour marks so the gridlines line up).
-    hour_bounds = [pct_at(h) for h in range(min_h, max_h + 1)]
+    # Floor (not round) each zone's ideal share — floors always sum to at most grid_pct,
+    # never over, so the leftover ("deficit" below) is always >= 0 and only ever needs
+    # handing OUT as +1s, never clawed back. Rounding instead could overshoot (verified: an
+    # important_start=0/important_end=24 range — no outside hours at all to absorb anything
+    # — rounded up to 4 per hour and totaled 96% against an 85% budget).
+    important_base = int(IMPORTANT_HOUR_WEIGHT / total_units * grid_pct)
+    outside_base = int(1 / total_units * grid_pct) if outside_n else 0
+    deficit = grid_pct - (important_base * important_n + outside_base * outside_n)
+
+    # Hand out the deficit as +1-per-hour, preferring outside (compressed, least prominent)
+    # hours first so the important zone stays perfectly uniform whenever there's enough
+    # outside hours to absorb it all; only overflows onto important hours if not (e.g. the
+    # important range covers the whole day and there are no outside hours to use at all).
+    bump_outside = min(deficit, outside_n)
+    bump_important = deficit - bump_outside
+
+    hour_pct = []
+    outside_bumped = important_bumped = 0
+    for h in range(24):
+        if important_start <= h < important_end:
+            extra = 1 if important_bumped < bump_important else 0
+            important_bumped += extra
+            hour_pct.append(important_base + extra)
+        else:
+            extra = 1 if outside_bumped < bump_outside else 0
+            outside_bumped += extra
+            hour_pct.append(outside_base + extra)
+
+    cum_pct = [0]
+    for p in hour_pct:
+        cum_pct.append(cum_pct[-1] + p)
+
+    def pct_at(t):
+        # Cumulative position for fractional hours (events, sunrise/sunset, "now") — these
+        # are positioned with plain CSS % on an inline style, not a bracket utility class,
+        # so decimals are fine there; only the h--[Ncqh] rows above need integers.
+        whole = int(t)
+        frac = t - whole
+        cum = cum_pct[whole] + (hour_pct[whole] * frac if whole < 24 else 0)
+        return grid_base + cum
+
     # Bold the hour label wherever a timed event starts (in any of the visible days), so the
     # axis doubles as a quick glance of "something happens around here" independent of color.
-    start_hours = {int(e["h0"]) for d in days for e in d["timed"] if min_h <= e["h0"] < max_h}
-    hour_rows = [{"hour": h, "pct": hour_bounds[i + 1] - hour_bounds[i], "shade": h % 2,
-                  "bold": h in start_hours}
-                 for i, h in enumerate(range(min_h, max_h))]
+    start_hours = {int(e["h0"]) for d in days for e in d["timed"] if 0 <= e["h0"] < 24}
+    hour_rows = [{"hour": h, "pct": hour_pct[h], "shade": h % 2, "bold": h in start_hours}
+                 for h in range(24)]
 
     out_days = []
     for di, d in enumerate(days):
         clusters = [c for c in _cluster(d["timed"])
-                    if max(c["h0"], min_h) < min(c["h1"], max_h)]
+                    if max(c["h0"], 0) < min(c["h1"], 24)]
         for c in clusters:
-            c["h0"] = max(c["h0"], min_h)
-            c["h1"] = min(c["h1"], max_h)
+            c["h0"] = max(c["h0"], 0)
+            c["h1"] = min(c["h1"], 24)
 
-        # Boundaries: window edges + cluster edges + hour marks that fall in a gap
-        # (not inside any cluster, so events stay one unbroken block).
-        bounds = {min_h, max_h}
-        for c in clusters:
-            bounds.add(c["h0"])
-            bounds.add(c["h1"])
-        for h in range(min_h + 1, max_h):
-            if not any(c["h0"] < h < c["h1"] for c in clusters):
-                bounds.add(h)
-
-        # Current-time marker: today-only, only within the visible window, and only where
-        # it doesn't fall inside an ongoing event (event blocks stay solid/uncut, same rule
-        # as hour marks above).
-        marks = []
-        if (d["is_today"] and now_h is not None and min_h <= now_h < max_h
-                and not any(c["h0"] < now_h < c["h1"] for c in clusters)):
-            marks.append({"hour": now_h, "kind": "now"})
-        for m in marks:
-            bounds.add(m["hour"])
+        # Background bounds: window edges + every whole hour, ALWAYS — regardless of whether
+        # an event happens to be running — so the zebra/night/weather background keeps its
+        # normal per-hour texture underneath an event exactly like it would without one.
+        # Events used to flatten this into one shade for their whole span (computed at a
+        # single midpoint), which looked visibly wrong for anything spanning more than an
+        # hour. Events are a separate absolutely-positioned overlay (below) painted on top,
+        # so they still cover the background naturally without the background needing to
+        # know about them.
+        bounds = {0, 24}
+        for h in range(1, 24):
+            bounds.add(h)
 
         # Sunrise/sunset: a thin colored line (like "now") measured unreadable on the real
         # (grayscale) device — a 1-3px tinted sliver against an already-striped background
@@ -747,11 +823,19 @@ def _layout_native(days, min_h, max_h, now_h=None, sun_marks=None, hourly_weathe
         # dark is a large-area signal instead, so it survives e-ink rendering the same way
         # the hour zebra-stripe does. Still split bounds at the sunrise/sunset hour so the
         # transition lands at the right minute, not just the right hour band.
-        day_sun = (sun_marks or {}).get(di, [])
+        #
+        # Deliberately uses day 0's (today's) sunrise/sunset for EVERY column, not each day's
+        # own — sunrise/sunset drifts by about a minute a day, and that real difference,
+        # rounded to whole percentage points, made the night/day boundary land a few pixels
+        # apart between adjacent columns. Three side-by-side columns with a visibly zigzagging
+        # boundary line reads as a layout bug even though the underlying data is correct; a
+        # single shared reference keeps it a straight, aligned line since nobody needs
+        # per-column, to-the-minute precision here anyway.
+        day_sun = (sun_marks or {}).get(0, [])
         sunrise_h = next((m["hour"] for m in day_sun if m["kind"] == "sunrise"), None)
         sunset_h = next((m["hour"] for m in day_sun if m["kind"] == "sunset"), None)
         for h in (sunrise_h, sunset_h):
-            if h is not None and min_h <= h < max_h and not any(c["h0"] < h < c["h1"] for c in clusters):
+            if h is not None and 0 <= h < 24:
                 bounds.add(h)
         bounds = sorted(bounds)
 
@@ -765,39 +849,77 @@ def _layout_native(days, min_h, max_h, now_h=None, sun_marks=None, hourly_weathe
         segments = []
         for a, b in zip(bounds, bounds[1:]):
             mid = (a + b) / 2.0
-            cl = next((c for c in clusters if c["h0"] <= mid < c["h1"]), None)
-            pct = pct_at(b) - pct_at(a)
-            if cl is None:
-                # Zebra-stripe by hour band instead of drawing a boundary line: five
-                # different thin-line techniques (border utility, gray fill, black fill,
-                # 1px/2px, with/without the JS overflow safety net) all measured correct
-                # server-side and rendered fine in local headless-Chrome testing, but never
-                # once showed up on the actual device — a real, unexplained divergence.
-                # A per-hour background shade is a large-area fill instead of a 1-2px sliver,
-                # so it can't fail the same way. Bounds already split every plain gap at each
-                # whole hour, so a spacer never spans more than one hour band — int(a) (its
-                # start, floored) reliably identifies which band it belongs to, even when a
-                # is fractional (e.g. a spacer starting right after an event ends mid-hour).
-                shade = int(a) % 2
-                seg_marks = [m for m in marks if m["hour"] == a]
-                segments.append({"type": "spacer", "pct": pct, "shade": shade, "marks": seg_marks,
-                                  "night": is_night(mid), "weather": day_weather.get(int(a))})
-                continue
-            lanes = []
-            for ev, lane in sorted(cl["lanes"], key=lambda p: p[1]):
-                lanes.append({
-                    "title": ev["title"], "hue": _hue(ev["cal_idx"]),
-                })
-            segments.append({"type": "event", "pct": pct, "lanes": lanes})
+            # A segment never spans more than one hour (bounds already split at every whole
+            # hour), so int(a) identifies which hour's budget it draws from. Telescope WITHIN
+            # that hour — round(hour_pct[h] * local_b) - round(hour_pct[h] * local_a) — rather
+            # than rounding pct_at(b) - pct_at(a) independently: rounding each fragment of a
+            # split hour (sunrise/sunset falling inside it) on its own doesn't guarantee the
+            # fragments sum back to that hour's already-fixed integer total (e.g. a 5%-hour
+            # split 90/10 independently rounds to 5 and 1, summing to 6, one too many — or 4
+            # and 0, one too few). Telescoping the local fraction guarantees an exact match:
+            # at local_b=1 it reduces to exactly hour_pct[h], the same value hour_rows uses,
+            # so a whole (unsplit) hour is also automatically identical to the axis row.
+            h = int(a)
+            pct = round(hour_pct[h] * (b - h)) - round(hour_pct[h] * (a - h))
+            # Zebra-stripe by hour band instead of drawing a boundary line: five different
+            # thin-line techniques (border utility, gray fill, black fill, 1px/2px, with/
+            # without the JS overflow safety net) all measured correct server-side and
+            # rendered fine in local headless-Chrome testing, but never once showed up on
+            # the actual device — a real, unexplained divergence. A per-hour background
+            # shade is a large-area fill instead of a 1-2px sliver, so it can't fail the same
+            # way. Bounds already split at each whole hour, so a band never spans more than
+            # one hour — int(a) (its start, floored) reliably identifies which band it
+            # belongs to, even when a is fractional (e.g. right after sunrise mid-hour).
+            shade = int(a) % 2
+            segments.append({"pct": pct, "shade": shade,
+                              "night": is_night(mid), "weather": day_weather.get(int(a))})
 
-        _enforce_min_event_pct(segments)
-        _enforce_min_mark_pct(segments)
+        # "Now" is an absolutely-positioned overlay too, for the same reason events are: it
+        # used to be enforced to a minimum visible height by borrowing pct from whichever
+        # OTHER background segment in today's column happened to be largest — which shrank
+        # that segment relative to the same hour band on every other day (none of which have
+        # a "now" mark, so none of them ever borrowed). Today's zebra bands would then be
+        # sized slightly differently from both the hour axis and every other column even
+        # though they cover the same hours — exactly the kind of "first column doesn't line
+        # up" bug the event-overlay refactor already fixed once for events. Deriving its
+        # position straight from pct_at(now_h), independent of the segment list, means
+        # nothing about today's own background sizing ever has to change to show it.
+        now_marker = None
+        if d["is_today"] and now_h is not None and 0 <= now_h < 24:
+            top = pct_at(now_h) - grid_base
+            now_marker = {"top_pct": round(top / grid_pct * 100, 4), "night": is_night(now_h)}
+
+        # Events are absolutely-positioned overlays, sized straight from pct_at() on each
+        # cluster's own h0/h1 as a fraction of the GRID area's own height (0-100, relative to
+        # grid_pct) — independent of the background's own segmentation, so an event's minimum-
+        # size enforcement can never borrow space from a spacer and drag its rendered start
+        # time away from its real hour (see git history for the alignment bug that caused).
+        events = []
+        sorted_clusters = sorted(clusters, key=lambda c: c["h0"])
+        for idx, c in enumerate(sorted_clusters):
+            top = pct_at(c["h0"]) - grid_base
+            height = pct_at(c["h1"]) - grid_base - top
+            if height < MIN_EVENT_PCT:
+                # Grow downward to the minimum readable size, but don't run past the next
+                # event if there isn't room — a slightly-undersized block reads better than
+                # two events visually overlapping.
+                next_top = (pct_at(sorted_clusters[idx + 1]["h0"]) - grid_base
+                            if idx + 1 < len(sorted_clusters) else grid_pct)
+                height = min(MIN_EVENT_PCT, max(0, next_top - top))
+            lanes = [{"title": ev["title"], "hue": _hue(ev["cal_idx"])}
+                     for ev, lane in sorted(c["lanes"], key=lambda p: p[1])]
+            events.append({"top_pct": round(top / grid_pct * 100, 4),
+                            "height_pct": round(height / grid_pct * 100, 4),
+                            "lanes": lanes})
+
         out_days.append({
             "label": d["label"], "is_today": d["is_today"],
-            "allday": d["allday"], "segments": segments,
+            "temp": d.get("temp"), "icon": d.get("icon"),
+            "allday": d["allday"], "segments": segments, "events": events,
+            "now_marker": now_marker,
         })
 
     return {
         "header_pct": HEADER_PCT, "allday_pct": allday_pct, "grid_pct": grid_pct,
-        "hour_rows": hour_rows, "days": out_days,
+        "title_bar_pct": title_bar_pct, "hour_rows": hour_rows, "days": out_days,
     }
