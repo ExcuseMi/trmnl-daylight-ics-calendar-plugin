@@ -25,19 +25,17 @@ custom_fields:
   placeholder: |-
     https://cloud.example.com/remote.php/dav/public-calendars/TOKEN1/?export
     https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export
-- keyname: time_zone
-  field_type: time_zone
-  name: Time Zone
-  description: Days and event times are computed in this zone. Leave blank to use your TRMNL account's own time zone.
-  optional: true
-- keyname: time_format
+- keyname: view_days
   field_type: select
-  name: Time Format
-  description: How event and sun times are displayed.
+  name: Days to Show
+  description: How many days the calendar grid covers, starting today.
   options:
-  - 24-hour (14:30): 24h
-  - 12-hour (2:30 PM): 12h
-  default: 24h
+  - 1 day: '1'
+  - 2 days: '2'
+  - 3 days: '3'
+  - 5 days: '5'
+  - 1 week: '7'
+  default: '3'
 - keyname: location
   field_type: string
   name: Location (for sunrise/sunset)
@@ -51,24 +49,23 @@ custom_fields:
   - Celsius (°C): celsius
   - Fahrenheit (°F): fahrenheit
   default: celsius
-- keyname: view_days
+- keyname: time_format
   field_type: select
-  name: Days to Show
-  description: How many days the calendar grid covers, starting today.
+  name: Time Format
+  description: How event and sun times are displayed.
   options:
-  - 1 day: '1'
-  - 2 days: '2'
-  - 3 days: '3'
-  - 5 days: '5'
-  - 1 week: '7'
-  default: '3'
+  - 24-hour (14:30): 24h
+  - 12-hour (2:30 PM): 12h
+  default: 24h
+- keyname: time_zone
+  field_type: time_zone
+  name: Time Zone
+  description: Days and event times are computed in this zone. Leave blank to use your TRMNL account's own time zone.
+  optional: true
 - keyname: show_title_bar
-  field_type: select
+  field_type: boolean
   name: Title Bar
   description: Shows a bar with this plugin instance's name across the top of the screen. Off by default to leave more room for the calendar grid.
-  options:
-  - 'Off': 'no'
-  - 'On': 'yes'
-  default: 'no'
+  default: 'false'
 name: Daylight & Weather Calendar
 refresh_interval: 15

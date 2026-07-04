@@ -30,7 +30,7 @@ def run(input):
     location = _cf(input, "location")
     fahrenheit = _cf(input, "temperature_unit").strip().lower() == "fahrenheit"
     days_n = _int(_cf(input, "view_days"), DEFAULT_DAYS, 1, 7)
-    show_title_bar = _cf(input, "show_title_bar").strip().lower() == "yes"
+    show_title_bar = _cf(input, "show_title_bar").strip().lower() in ("true", "yes", "1")
     title_bar_pct = TITLE_BAR_PCT if show_title_bar else 0
     title_text = _title_text(input)
 
@@ -87,14 +87,20 @@ def run(input):
             "label": _day_label(d0, t),
             "is_today": i == 0,
             "timed": timed,
-            "allday": [{"title": a["title"], "hue": _hue(a["cal_idx"])} for a in allday[:3]],
+            "allday": [{"title": a["title"], "hue": _hue(a["cal_idx"]),
+                        # Lets the template draw multi-day all-day events as one continuous
+                        # banner (square off the edge that's mid-span) instead of a separate
+                        # fully-rounded pill repeating in every day column it touches.
+                        "continues_before": a["start"] < d0,
+                        "continues_after": a["end"] > d1}
+                       for a in allday[:3]],
         })
 
     # Fractional hour of "now" within today's column, e.g. 14:30 -> 14.5 — used to draw a
     # current-time marker. `win_s` (today's midnight) is always "now" with the clock zeroed,
     # so this is just the elapsed time since then.
     now_h = (now - win_s).total_seconds() / 3600.0
-    sun, hourly_weather, daily_temps = _fetch_sky(location, days_n, fahrenheit)
+    sun, hourly_weather, daily_temps, weather_error = _fetch_sky(location, days_n, fahrenheit)
     for i, rd in enumerate(raw_days):
         rd["temp"] = daily_temps.get(i)
         rd["icon"] = _day_icon(hourly_weather.get(i)) if rd["temp"] else None
@@ -123,7 +129,8 @@ def run(input):
     return dict(grid, generated_at=int(now.timestamp()), tz=tzname, error=err,
                 unavailable_label=t["unavailable"],
                 has_events=any(d["timed"] or d["allday"] for d in raw_days),
-                show_title_bar=show_title_bar, title_text=title_text)
+                show_title_bar=show_title_bar, title_text=title_text,
+                weather_error=weather_error)
 
 
 # ---------------------------------------------------------------- input helpers
@@ -186,7 +193,7 @@ def _empty(tzname, tz, t, days_n, msg, show_title_bar=False, title_bar_pct=0, ti
     grid = _layout_native(days, 8, 22, None, title_bar_pct=title_bar_pct)
     return dict(grid, generated_at=int(now.timestamp()), tz=tzname,
                 error=msg, unavailable_label=t["unavailable"], has_events=False,
-                show_title_bar=show_title_bar, title_text=title_text)
+                show_title_bar=show_title_bar, title_text=title_text, weather_error=None)
 
 
 # ------------------------------------------------------------------- translations
@@ -569,14 +576,17 @@ def _day_icon(hours):
 def _fetch_sky(location, days_n, fahrenheit=False):
     """Sunrise/sunset + significant hourly weather + daily high/low, from a single Open-Meteo
     forecast call. `location` is either "lat,lon" or a place name (geocoded).
-    Returns (sun_marks, hourly_weather, daily_temps):
+    Returns (sun_marks, hourly_weather, daily_temps, error):
       sun_marks:      {day_index: [{"hour", "kind"}, ...]}            kind: sunrise/sunset
       hourly_weather: {day_index: {hour_int: "rain"/"snow"/"storm"/"fog"}}
       daily_temps:    {day_index: {"high": float, "low": float}}      Celsius, or Fahrenheit
                                                                        if fahrenheit=True
+      error:          None on success (including "no location configured"), else a short
+                      diagnostic string — geocode failure, HTTP error, timeout, etc.
     Best-effort only — the calendar itself is the primary feature, so any failure here
     (bad location, network hiccup, timeout) just omits sun/weather/temps instead of surfacing
-    as a page-level error.
+    as a page-level error. `error` is carried into the output as a debug-only field so a
+    failure like this is diagnosable from the next poll's output instead of guesswork.
 
     Uses timezone="auto" so Open-Meteo derives the zone straight from the geocoded lat/lon,
     independent of whatever zone this plugin resolved for the calendar grid — that avoids
@@ -593,11 +603,11 @@ def _fetch_sky(location, days_n, fahrenheit=False):
     today specifically while still showing for the other two days. Position can't drift."""
     location = (location or "").strip()
     if not location:
-        return {}, {}, {}
+        return {}, {}, {}, None
     try:
         latlon = _parse_latlon(location) or _geocode(location)
         if not latlon:
-            return {}, {}, {}
+            return {}, {}, {}, "could not geocode location %r" % location
         lat, lon = latlon
         params = {
             "latitude": lat, "longitude": lon,
@@ -646,9 +656,13 @@ def _fetch_sky(location, days_n, fahrenheit=False):
                 if kind is not None:
                     hourly_weather.setdefault(day_i, {})[dt.hour] = kind
 
-        return sun_marks, hourly_weather, daily_temps
-    except Exception:
-        return {}, {}, {}
+        return sun_marks, hourly_weather, daily_temps, None
+    except Exception as exc:
+        # Best-effort: never break the calendar over a weather hiccup. But silently
+        # swallowing the reason made a real failure indistinguishable from "no location
+        # configured" — return it so run() can surface it as a debug-only field (never a
+        # page-level error) instead of leaving a future occurrence to guesswork.
+        return {}, {}, {}, "%s: %s" % (type(exc).__name__, exc)
 
 
 # ------------------------------------------------------------ native grid layout
@@ -660,7 +674,7 @@ def _fetch_sky(location, days_n, fahrenheit=False):
 # TRMNL X. Liquid does no layout math itself; it just loops over this pre-baked structure.
 
 HEADER_PCT = 15  # bumped from 11 to fit a second line (daily high/low) under the day label
-ALLDAY_ROW_PCT = 9
+ALLDAY_ROW_PCT = 6
 TITLE_BAR_PCT = 6  # optional plugin-name bar at the very top, off by default (see run())
 MIN_EVENT_PCT = 10  # floor so a block is never a literally invisible sliver — actual font
                      # sizing is handled client-side by the fit-text script (see shared.liquid),
@@ -791,10 +805,13 @@ def _layout_native(days, important_start, important_end, now_h=None, sun_marks=N
         cum = cum_pct[whole] + (hour_pct[whole] * frac if whole < 24 else 0)
         return grid_base + cum
 
-    # Bold the hour label wherever a timed event starts (in any of the visible days), so the
-    # axis doubles as a quick glance of "something happens around here" independent of color.
-    start_hours = {int(e["h0"]) for d in days for e in d["timed"] if 0 <= e["h0"] < 24}
-    hour_rows = [{"hour": h, "pct": hour_pct[h], "shade": h % 2, "bold": h in start_hours}
+    # Bold the hour label wherever a timed event starts TODAY specifically, so the axis
+    # doubles as a quick glance of "something happens around here" for the day that matters
+    # most — bolding for every visible day made the axis mostly-bold on a busy week and lost
+    # that at-a-glance signal.
+    start_hours = {int(e["h0"]) for d in days if d["is_today"] for e in d["timed"] if 0 <= e["h0"] < 24}
+    hour_rows = [{"hour": h, "pct": hour_pct[h], "shade": h % 2, "bold": h in start_hours,
+                  "important": important_start <= h < important_end}
                  for h in range(24)]
 
     out_days = []

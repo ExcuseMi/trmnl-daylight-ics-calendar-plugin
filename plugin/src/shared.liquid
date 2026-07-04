@@ -10,12 +10,23 @@
 </style>
 {%- if view == 4 -%}
   {%- comment -%} quadrant: a quarter of the full-view screen area — needs its own,
-  smaller floor rather than sharing full's or even the half-views' sizes. {%- endcomment -%}
+  smaller floor rather than sharing full's or even the half-views' sizes.
+
+  event_title_cls: event titles previously had NO static size class at all — just the bare
+  "title" class (26px) plus cal-fit-text's JS-driven inline font-size to shrink it down per
+  box. Every other piece of text on this page (day label, axis, temps) has a properly tiered
+  static class as its baseline; events didn't, so if the JS sizing script doesn't run (or
+  doesn't run in time) on whatever renders the real device's screenshot, the title is stuck at
+  the full 26px default — overflowing/clipping badly against these views' much smaller event
+  boxes regardless of what the JS would have picked. Giving it a sane tiered starting size
+  fixes the worst case outright; the JS still fine-tunes per-box on top of it when it runs.
+  {%- endcomment -%}
   {%- assign head_title_cls = "title--small" -%}
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--small" -%}
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
+  {%- assign event_title_cls = "title--small" -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
   width-constrained rather than area-constrained, so it needs a smaller tier than
@@ -25,6 +36,7 @@
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
+  {%- assign event_title_cls = "title--small" -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half height — width is ample,
   so it can keep a larger tier than half_vertical. {%- endcomment -%}
@@ -33,6 +45,7 @@
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--1 pb--2 px--2" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
+  {%- assign event_title_cls = "title--small" -%}
 {%- else -%}
   {%- comment -%} full / "OG" 800x480 device: the hour axis at xlarge/xxlarge read too big
   in practice — one tier down still reads fine at this size and leaves more room. Rotated to
@@ -50,6 +63,7 @@
   line-height carries more empty space above the glyphs than below, so an even p--2 on all
   sides reads as too much padding on top specifically. Trim just the top. {%- endcomment -%}
   {%- assign daylabel_pad_cls = "pt--1 pb--2 px--2" -%}
+  {%- assign event_title_cls = "title--base" -%}
 {%- endif -%}
 
 {%- comment -%} Every tier above assumes the original 3-day layout's column width. With
@@ -197,8 +211,42 @@ there are more columns than the sizes above were tuned for, regardless of view. 
         {% for day in days %}
           <div class="col--span-4 flex flex--col gap--xsmall px--[4px] border--v-1">
             {% for a in day.allday %}
-              <div class="bg--{{ a.hue }}-30 rounded--small px--[8px] py--[2px]">
-                <span class="title {{ chip_title_cls }} text--white" data-clamp="1">{{ a.title }}</span>
+              <!-- A multi-day all-day event used to repeat as an identical, fully-rounded
+                   pill in every day column it touched, which read as several unrelated
+                   events instead of one continuous span. Square off whichever edge is
+                   mid-span (continues_before/after, computed in transform.py from whether
+                   the event's real start/end falls outside this specific day) and pull that
+                   edge out past the column's own px--[4px] inset with a matching negative
+                   margin, so the two neighboring pieces sit flush against the day divider
+                   instead of leaving a gap, reading as one bar crossing the boundary. -->
+              {% if a.continues_before and a.continues_after %}
+                {% assign ad_radius = "0px" %}
+              {% elsif a.continues_after %}
+                {% assign ad_radius = "7px 0 0 7px" %}
+              {% elsif a.continues_before %}
+                {% assign ad_radius = "0 7px 7px 0" %}
+              {% else %}
+                {% assign ad_radius = "7px" %}
+              {% endif %}
+              <!-- yellow/lime's bg--{hue}-30 fill is pale enough (measured luminance ~150/~125
+                   out of 255, vs. ~20-100 for the rest) that white text loses contrast —
+                   near-black reads clearly there instead, every other hue keeps white. -->
+              {% if a.hue == "yellow" or a.hue == "lime" %}
+                {% assign ad_text_cls = "text--black" %}
+              {% else %}
+                {% assign ad_text_cls = "text--white" %}
+              {% endif %}
+              <!-- w--full: the framework's .flex--col sets align-items:center (not the
+                   usual stretch), so without this every chip shrink-wraps to its own title's
+                   text width and centers in the column instead of spanning it. -->
+              <!-- pl--1 + pr--2 instead of px--[8px]: the framework's generic px--
+                   attribute-selector rule sets both padding-left AND padding-right from the
+                   same --tn-px variable, and (being the same specificity, later in the
+                   stylesheet) silently wins over a separate pl--N class fighting it for
+                   padding-left — named pl--N/pr--N classes each only touch their own side,
+                   so they don't conflict with each other. -->
+              <div class="bg--{{ a.hue }}-30 w--full pl--1 pr--2 py--[2px]" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+                <span class="title {{ chip_title_cls }} {{ ad_text_cls }}" data-clamp="1">{{ a.title }}</span>
               </div>
             {% endfor %}
           </div>
@@ -226,7 +274,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                  own overflow:hidden (see script below) just clips those specific numbers,
                  which is fine: the emphasized hours (the ones actually worth reading) fit
                  exactly, and used to be hidden on quadrant entirely regardless of size. -->
-              <span class="label {{ axis_cls }} {% if row.bold %}font--bold{% endif %} cal-fit-text cal-axis-text" data-fit-min="8" data-fit-max="40">{{ row.hour }}</span>
+              <span class="label {{ axis_cls }} {% if row.bold %}font--bold{% endif %} cal-fit-text cal-axis-text{% if row.important %} cal-axis-important{% endif %}" data-fit-min="8" data-fit-max="40">{{ row.hour }}</span>
           </div>
         {% endfor %}
       </div>
@@ -292,10 +340,23 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                  all-day rows' own height if used here. A small side inset (px--1) lets the
                  background peek through left/right; no top/bottom inset (see below). -->
             <div style="position:absolute;left:0;right:0;top:{{ event.top_pct }}%;height:{{ event.height_pct }}%;">
-              <div class="h--full w--full grid grid--cols-{{ event.lanes.size }} gap--xsmall px--1 cal-row">
+              <!-- NOT cal-row: that class also carries a blanket JS-forced overflow:hidden
+                   (see run(), needed for the axis/background rows whose size actually is
+                   content-driven) which would re-clip a too-tall title right back after
+                   fit() just set this event's own cal-fit-box to overflow:visible below. -->
+              <div class="h--full w--full grid grid--cols-{{ event.lanes.size }} gap--xsmall px--1">
                 {% for lane in event.lanes %}
+                  <!-- yellow/lime's bg--{hue}-30 fill is pale enough (measured luminance
+                       ~150/~125 out of 255, vs. ~20-100 for the rest) that white text loses
+                       contrast — near-black reads clearly there instead, every other hue
+                       keeps white. -->
+                  {% if lane.hue == "yellow" or lane.hue == "lime" %}
+                    {% assign ev_text_cls = "text--black" %}
+                  {% else %}
+                    {% assign ev_text_cls = "text--white" %}
+                  {% endif %}
                   <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-30 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box">
-                    <span class="title text--white cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
+                    <span class="title {{ event_title_cls }} {{ ev_text_cls }} cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
                   </div>
                 {% endfor %}
               </div>
@@ -319,9 +380,16 @@ there are more columns than the sizes above were tuned for, regardless of view. 
   function fit(el, forced) {
     var box = el.closest('.cal-fit-box');
     if (!box) return null;
-    // Clip rather than let oversized text grow the box — a flex/grid item otherwise
-    // auto-expands to fit its content, which would push every later hour off-screen.
-    box.style.overflow = 'hidden';
+    // The axis still needs to clip — an hour number too tall for its row would otherwise
+    // auto-expand a flex/grid child and push every later hour off-screen (the box's size
+    // there IS content-driven). Event titles don't have that risk: their box is an
+    // absolutely-positioned overlay with a fixed top/height percentage regardless of
+    // content, so letting an unavoidably-too-small title spill past its pill (matching how
+    // TRMNL's own official calendar plugin handles this — fixed font size, overflow:
+    // visible, see github.com/usetrmnl/plugins lib/calendar) reads far better than either
+    // clipping mid-glyph or hiding the title outright.
+    var isAxis = el.classList.contains('cal-axis-text');
+    box.style.overflow = isAxis ? 'hidden' : 'visible';
     el.style.overflowWrap = 'anywhere'; // let a single long word break rather than
                                          // overflow a narrow (multi-lane) block sideways
     el.style.display = 'block';         // make width/maxWidth apply predictably
@@ -425,28 +493,50 @@ there are more columns than the sizes above were tuned for, regardless of view. 
       fit(titles[i]);
     }
 
-    // Hour axis numbers all share ONE size instead: "10"/"23" are wider than "0"-"9", so
-    // fitting each row independently to its own row's width left two-digit hours visibly
-    // smaller than the one-digit hours right next to them, even though they're the same
-    // logical label. Fit each once to find what it could individually be, then force every
-    // one down to the smallest of those ceilings for a uniform look across the whole axis.
-    var axisText = root.querySelectorAll('.cal-axis-text');
-    var minSize = null;
-    for (var j = 0; j < axisText.length; j++) {
-      if (lgPortrait) axisText[j].setAttribute('data-fit-max', '48');
-      var s = fit(axisText[j]);
-      if (s != null && (minSize === null || s < minSize)) minSize = s;
+    // Hour axis numbers share ONE size within their own group instead of each fitting
+    // independently: "10"/"23" are wider than "0"-"9", so fitting each row independently
+    // to its own row's width left two-digit hours visibly smaller than the one-digit hours
+    // right next to them, even though they're the same logical label. Fit each once to find
+    // what it could individually be, then force every one in the group down to the smallest
+    // of those ceilings for a uniform look.
+    //
+    // Two SEPARATE groups (important-range hours vs. the compressed hours outside it)
+    // rather than one group across all 24 — the compressed hours can be a sliver of the
+    // important hours' height (that's the whole point of the important-range emphasis), so
+    // one shared minimum across all 24 let a single extremely thin compressed row (which
+    // can't legibly fit any size and clips regardless) tank the readable important-range
+    // labels down to the same tiny floor. Fitting the two zones separately keeps the
+    // important hours at the largest size THEY can uniformly support.
+    function fitAxisGroup(selector, maxOverride) {
+      var els = root.querySelectorAll(selector);
+      var minSize = null;
+      for (var j = 0; j < els.length; j++) {
+        if (maxOverride) els[j].setAttribute('data-fit-max', maxOverride);
+        var s = fit(els[j]);
+        if (s != null && (minSize === null || s < minSize)) minSize = s;
+      }
+      if (minSize !== null) {
+        for (var k = 0; k < els.length; k++) fit(els[k], minSize);
+      }
     }
-    if (minSize !== null) {
-      for (var k = 0; k < axisText.length; k++) fit(axisText[k], minSize);
-    }
+    fitAxisGroup('.cal-axis-important', lgPortrait ? '48' : null);
+    fitAxisGroup('.cal-axis-text:not(.cal-axis-important)', lgPortrait ? '48' : null);
   }
 
   // Wait for the Inter webfont to finish loading before measuring. If fit() measures
   // against the fallback font (narrower/wider metrics) before Inter swaps in, the text
   // reflows after fit() has already locked in a size, silently overflowing the box it
   // was just fitted to (clipped by the box's own overflow:hidden with no way to react).
+  //
+  // BUT document.fonts.ready can take a while (or, on a render sandbox with restricted/
+  // slow font fetches, might not resolve before the render pipeline captures its screenshot
+  // at all) — and never running fit() at all is far worse than running it once against the
+  // fallback font: text is left completely unclamped, overflowing small event boxes badly
+  // instead of just reading at slightly-off metrics. Race a hard timeout against fonts.ready
+  // so fit() always runs at least once quickly, then again (harmless — it's idempotent) once
+  // fonts.ready actually resolves, correcting for the real font's metrics if it arrived late.
   function runAfterFonts() {
+    setTimeout(run, 400);
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(run).catch(run);
     } else {
